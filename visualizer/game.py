@@ -1,23 +1,25 @@
 import pygame
 
 
-LAND_COLOR = "#795a3b"
 FPS = 60
+MIN_WIDTH = 600
+MIN_HEIGHT = 600
+LAND_COLOR = "#795a3b"
 
 
 class AntsGame:
     """Defines the Ants game class using Pygame.
 
-    :param width: The width of the game window.
+    :param width: The width of the game. The window will be at least 600 pixels wide.
     :type width: int
-    :param height: The height of the game window.
+    :param height: The height of the game. The window will be at least 600 pixels tall.
     :type height: int
     """
 
     def __init__(self, width: int, height: int) -> None:
         pygame.init()
 
-        self._screen = pygame.display.set_mode((width, height))
+        self._screen = pygame.display.set_mode((max(width, MIN_WIDTH), max(height, MIN_HEIGHT)))
         self._clock = pygame.time.Clock()
         self._running = False
 

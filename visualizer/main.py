@@ -1,11 +1,21 @@
+import argparse
+import json
+
 from game import AntsGame
 
 
-def main(width: int, height: int) -> None:
-    game = AntsGame(width, height)
+def main(map: dict) -> None:
+    game = AntsGame(width=map["cols"], height=map["rows"])
     game.run()
 
 
 if __name__ == "__main__":
-    # TODO: Parse an actual replay file
-    main(width=700, height=700)
+    parser = argparse.ArgumentParser(description="Visualize an Ants game.")
+    parser.add_argument("--file", "-f", type=str, required=True, help="The replay file to visualize.")
+
+    args = parser.parse_args()
+
+    with open(args.file, "r") as f:
+        replay = json.load(f)
+
+    main(replay["map"])
