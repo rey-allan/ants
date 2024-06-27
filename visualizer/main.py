@@ -5,7 +5,7 @@ from game import AntsGame
 
 
 def main(map: dict) -> None:
-    game = AntsGame(width=map["cols"], height=map["rows"])
+    game = AntsGame(width=map["cols"], height=map["rows"], map=map["data"])
     game.run()
 
 
