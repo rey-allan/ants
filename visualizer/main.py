@@ -1,24 +1,11 @@
-import pygame
+from game import AntsGame
 
 
-def main() -> None:
-    pygame.init()
-    screen = pygame.display.set_mode((700, 700))
-    clock = pygame.time.Clock()
-    running = True
-
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-        screen.fill("#795a3b")
-        pygame.display.flip()
-
-        clock.tick(60)
-
-    pygame.quit()
+def main(width: int, height: int) -> None:
+    game = AntsGame(width, height)
+    game.run()
 
 
 if __name__ == "__main__":
-    main()
+    # TODO: Parse an actual replay file
+    main(width=700, height=700)
