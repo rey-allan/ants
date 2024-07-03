@@ -1,10 +1,10 @@
 import math
-from typing import Tuple
+import time
+from typing import List, Tuple
 
 import pygame
 
 
-ACTION_SPAWN = "SPAWN"
 CHAR_WATER = "%"
 COLOR_LAND = "#795a3b"
 COLOR_PLAYERS = [
@@ -20,6 +20,11 @@ COLOR_PLAYERS = [
     "#2EB87E",
 ]
 COLOR_WATER = "#010647"
+DELAY = 0.5
+DIRECTION_EAST = "E"
+DIRECTION_NORTH = "N"
+DIRECTION_SOUTH = "S"
+DIRECTION_WEST = "W"
 FPS = 60
 MIN_HEIGHT = 600
 MIN_WIDTH = 600
@@ -44,6 +49,8 @@ class AntsGame:
         self._cell_radius = min(self._cell_width, self._cell_height) // 2
         self._map = replay["map"]["data"]
         self._turns = replay["turns"]
+        self._current_turn = 0
+        self._ants = {}
         self._screen = pygame.display.set_mode((self._width, self._height))
         self._clock = pygame.time.Clock()
         self._running = False
@@ -57,13 +64,52 @@ class AntsGame:
                 if event.type == pygame.QUIT:
                     self._running = False
 
+            if self._current_turn >= len(self._turns):
+                continue
+
+            turn = self._turns[self._current_turn]
+            self._move_ants(turn.get("move", []))
+            self._spawn_ants(turn.get("spawn", []))
+
             self._draw_map()
-            self._draw_turn()
+            self._draw_ants()
 
             pygame.display.flip()
             self._clock.tick(FPS)
+            # Add a delay for better visualization
+            time.sleep(DELAY)
+
+            self._current_turn += 1
 
         pygame.quit()
+
+    def _move_ants(self, to_move: List[dict]) -> None:
+        for move in to_move:
+            ant = self._ants.get(f"{move['id']}-{move['owner']}", None)
+
+            if not ant:
+                continue
+
+            ant["location"] = self._move_ant(ant, move["direction"])
+
+    def _move_ant(self, ant: dict, direction: str) -> Tuple[int, int]:
+        location = ant["location"]
+        row, col = location
+
+        if direction == DIRECTION_NORTH:
+            row -= 1
+        elif direction == DIRECTION_SOUTH:
+            row += 1
+        elif direction == DIRECTION_WEST:
+            col -= 1
+        elif direction == DIRECTION_EAST:
+            col += 1
+
+        return row, col
+
+    def _spawn_ants(self, to_spawn: List[dict]) -> None:
+        for ant in to_spawn:
+            self._ants[f"{ant['id']}-{ant['owner']}"] = {**ant}
 
     def _draw_map(self) -> None:
         self._screen.fill(COLOR_LAND)
@@ -75,11 +121,11 @@ class AntsGame:
                 elif col.isdigit():
                     self._draw_hill(row=i, col=j, hill=int(col))
 
-    def _draw_turn(self) -> None:
-        for turn in self._turns:
-            for ant in turn["ants"]:
-                if ant["action"]["type"] == ACTION_SPAWN:
-                    self._spawn_ant(ant, ant["action"])
+    def _draw_ants(self) -> None:
+        for ant in self._ants.values():
+            row, col = ant["location"]
+            owner = ant["owner"]
+            self._draw_ant(row, col, owner)
 
     def _draw_water(self, row: int, col: int) -> None:
         scaled_row, scaled_col = self._scale(row, col)
@@ -90,10 +136,6 @@ class AntsGame:
         self._draw_circle(row, col, self._cell_radius, COLOR_PLAYERS[hill % len(COLOR_PLAYERS)])
         # And a smaller black circle in the center
         self._draw_circle(row, col, self._cell_radius // 2, color=(0, 0, 0))
-
-    def _spawn_ant(self, ant: dict, action: dict) -> None:
-        location = action["location"]
-        self._draw_ant(row=location[0], col=location[1], owner=ant["owner"])
 
     def _draw_ant(self, row: int, col: int, owner: int) -> None:
         self._draw_circle(row, col, self._cell_radius // 1.5, color=COLOR_PLAYERS[owner % len(COLOR_PLAYERS)])

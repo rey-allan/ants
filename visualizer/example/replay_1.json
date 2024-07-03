@@ -50,13 +50,58 @@
   },
   "turns": [
     {
-      "ants": [
+      "spawn": [
         {
+          "id": 0,
           "owner": 0,
-          "action": {
-            "type": "SPAWN",
-            "location": [10, 10]
-          }
+          "location": [28, 19]
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "location": [14, 19]
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "direction": "E"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "direction": "E"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "direction": "E"
         }
       ]
     }
