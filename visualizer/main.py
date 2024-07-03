@@ -4,8 +4,8 @@ import json
 from game import AntsGame
 
 
-def main(map: dict) -> None:
-    game = AntsGame(width=map["cols"], height=map["rows"], map=map["data"])
+def main(replay: dict) -> None:
+    game = AntsGame(replay)
     game.run()
 
 
@@ -18,4 +18,4 @@ if __name__ == "__main__":
     with open(args.file, "r") as f:
         replay = json.load(f)
 
-    main(replay["map"])
+    main(replay)
