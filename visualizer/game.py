@@ -51,6 +51,8 @@ class AntsGame:
         self._turns = replay["turns"]
         self._current_turn = 0
         self._ants = {}
+        self._attacks = []
+        self._ants_to_remove = []
         self._screen = pygame.display.set_mode((self._width, self._height))
         self._clock = pygame.time.Clock()
         self._running = False
@@ -69,10 +71,14 @@ class AntsGame:
 
             turn = self._turns[self._current_turn]
             self._move_ants(turn.get("move", []))
+            self._attack_ants(turn.get("attack", []))
             self._spawn_ants(turn.get("spawn", []))
 
             self._draw_map()
             self._draw_ants()
+            self._draw_attacks()
+
+            self._remove_ants()
 
             pygame.display.flip()
             self._clock.tick(FPS)
@@ -107,9 +113,26 @@ class AntsGame:
 
         return row, col
 
+    def _attack_ants(self, to_attack: List[dict]) -> None:
+        for attack in to_attack:
+            attacker = self._ants.get(f"{attack['id']}-{attack['owner']}", None)
+            attacked = self._ants.get(f"{attack['target']['id']}-{attack['target']['owner']}", None)
+
+            if not attacker or not attacked:
+                continue
+
+            self._attacks.append((attacker["location"], attacked["location"]))
+            self._ants_to_remove.append(attacked)
+
     def _spawn_ants(self, to_spawn: List[dict]) -> None:
         for ant in to_spawn:
             self._ants[f"{ant['id']}-{ant['owner']}"] = {**ant}
+
+    def _remove_ants(self) -> None:
+        for ant in self._ants_to_remove:
+            del self._ants[f"{ant['id']}-{ant['owner']}"]
+
+        self._ants_to_remove = []
 
     def _draw_map(self) -> None:
         self._screen.fill(COLOR_LAND)
@@ -127,6 +150,14 @@ class AntsGame:
             owner = ant["owner"]
             self._draw_ant(row, col, owner)
 
+    def _draw_attacks(self) -> None:
+        for attacker, attacked in self._attacks:
+            attacker_center = self._center(*self._scale(attacker[0], attacker[1]))
+            attacked_center = self._center(*self._scale(attacked[0], attacked[1]))
+            pygame.draw.line(self._screen, color=(0, 0, 0), start_pos=attacker_center, end_pos=attacked_center, width=2)
+
+        self._attacks = []
+
     def _draw_water(self, row: int, col: int) -> None:
         scaled_row, scaled_col = self._scale(row, col)
         self._screen.fill(COLOR_WATER, rect=pygame.Rect(scaled_col, scaled_row, self._cell_width, self._cell_height))
@@ -142,7 +173,7 @@ class AntsGame:
 
     def _draw_circle(self, row: int, col: int, radius: int, color: Tuple[int, int, int]) -> None:
         scaled_row, scaled_col = self._scale(row, col)
-        center = (scaled_col + self._cell_width // 2, scaled_row + self._cell_height // 2)
+        center = self._center(scaled_row, scaled_col)
         pygame.draw.circle(self._screen, color, center, radius)
 
     def _scale(self, row: int, col: int) -> Tuple[int, int]:
@@ -152,3 +183,7 @@ class AntsGame:
         scaled_row = row * self._height // self._rows
 
         return scaled_row, scaled_col
+
+    def _center(self, row: int, col: int) -> Tuple[int, int]:
+        # Calculate the center of a cell at the given row and column as an x,y coordinate
+        return (col + self._cell_width // 2, row + self._cell_height // 2)

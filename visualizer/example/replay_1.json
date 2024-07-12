@@ -104,6 +104,146 @@
           "direction": "E"
         }
       ]
-    }
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "E"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "E"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "E"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "E"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "direction": "S"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "direction": "S"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "direction": "S"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "direction": "S"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        }
+      ]
+    },
+    {
+      "attack": [
+        {
+          "id": 0,
+          "owner": 0,
+          "target": {
+            "id": 0,
+            "owner": 1
+          }
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "target": {
+            "id": 0,
+            "owner": 0
+          }
+        }
+      ]
+    },
+    {}
   ]
 }
