@@ -6,6 +6,7 @@ import pygame
 
 
 CHAR_WATER = "%"
+COLOR_FOOD = "#999166"
 COLOR_LAND = "#795a3b"
 COLOR_PLAYERS = [
     "#D41132",
@@ -53,6 +54,7 @@ class AntsGame:
         self._ants = {}
         self._attacks = []
         self._ants_to_remove = []
+        self._food = {}
         self._screen = pygame.display.set_mode((self._width, self._height))
         self._clock = pygame.time.Clock()
         self._running = False
@@ -74,9 +76,11 @@ class AntsGame:
             self._attack_ants(turn.get("attack", []))
             self._raze_hills(turn.get("raze", []))
             self._spawn_ants(turn.get("spawn", []))
+            self._spawn_food(turn.get("food", []))
 
             self._draw_map()
             self._draw_ants()
+            self._draw_food()
             self._draw_attacks()
 
             self._remove_ants()
@@ -151,6 +155,11 @@ class AntsGame:
         for ant in to_spawn:
             self._ants[f"{ant['id']}-{ant['owner']}"] = {**ant}
 
+    def _spawn_food(self, to_spawn: List[dict]) -> None:
+        for food in to_spawn:
+            location = food["location"]
+            self._food[f"{location[0]}-{location[1]}"] = {**food}
+
     def _remove_ants(self) -> None:
         for ant in self._ants_to_remove:
             del self._ants[f"{ant['id']}-{ant['owner']}"]
@@ -172,6 +181,11 @@ class AntsGame:
             owner = ant["owner"]
             self._draw_ant(row, col, owner)
 
+    def _draw_food(self) -> None:
+        for food in self._food.values():
+            row, col = food["location"]
+            self._draw_square(row, col, width=self._cell_width // 1.7, height=self._cell_height // 1.7, color=COLOR_FOOD)
+
     def _draw_attacks(self) -> None:
         for attacker, attacked in self._attacks:
             attacker_center = self._center(*self._scale(attacker[0], attacker[1]))
@@ -181,8 +195,7 @@ class AntsGame:
         self._attacks = []
 
     def _draw_water(self, row: int, col: int) -> None:
-        scaled_row, scaled_col = self._scale(row, col)
-        self._screen.fill(COLOR_WATER, rect=pygame.Rect(scaled_col, scaled_row, self._cell_width, self._cell_height))
+        self._draw_square(row, col, width=self._cell_width, height=self._cell_height, color=COLOR_WATER)
 
     def _draw_hill(self, row: int, col: int, owner: int, razed: bool) -> None:
         # Draw a circle with a random color based on the hill's owner
@@ -197,6 +210,10 @@ class AntsGame:
         scaled_row, scaled_col = self._scale(row, col)
         center = self._center(scaled_row, scaled_col)
         pygame.draw.circle(self._screen, color, center, radius)
+
+    def _draw_square(self, row: int, col: int, width: int, height: int, color: Tuple[int, int, int]) -> None:
+        scaled_row, scaled_col = self._scale(row, col)
+        self._screen.fill(color, rect=pygame.Rect(scaled_col, scaled_row, width, height))
 
     def _scale(self, row: int, col: int) -> Tuple[int, int]:
         # Calculate the scaled row and column of a cell at the given row and column

@@ -61,6 +61,17 @@
           "owner": 1,
           "location": [14, 19]
         }
+      ],
+      "food": [
+        {
+          "location": [19, 25]
+        },
+        {
+          "location": [25, 32]
+        },
+        {
+          "location": [0, 5]
+        }
       ]
     },
     {
