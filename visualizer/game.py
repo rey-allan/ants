@@ -47,7 +47,7 @@ class AntsGame:
         self._cell_width = math.ceil(self._width / self._cols)
         self._cell_height = math.ceil(self._height / self._rows)
         self._cell_radius = min(self._cell_width, self._cell_height) // 2
-        self._map = replay["map"]["data"]
+        self._map = self._parse_map(replay["map"]["data"])
         self._turns = replay["turns"]
         self._current_turn = 0
         self._ants = {}
@@ -72,6 +72,7 @@ class AntsGame:
             turn = self._turns[self._current_turn]
             self._move_ants(turn.get("move", []))
             self._attack_ants(turn.get("attack", []))
+            self._raze_hills(turn.get("raze", []))
             self._spawn_ants(turn.get("spawn", []))
 
             self._draw_map()
@@ -88,6 +89,18 @@ class AntsGame:
             self._current_turn += 1
 
         pygame.quit()
+
+    def _parse_map(self, map: List[str]) -> dict[str, List[dict]]:
+        parsed_map = {}
+
+        for i, row in enumerate(map):
+            for j, col in enumerate(row):
+                if col == CHAR_WATER:
+                    parsed_map[f"{i}-{j}"] = {"type": "water", "row": i, "col": j}
+                elif col.isdigit():
+                    parsed_map[f"{i}-{j}"] = {"type": "hill", "row": i, "col": j, "owner": int(col), "razed": False}
+
+        return parsed_map
 
     def _move_ants(self, to_move: List[dict]) -> None:
         for move in to_move:
@@ -124,6 +137,16 @@ class AntsGame:
             self._attacks.append((attacker["location"], attacked["location"]))
             self._ants_to_remove.append(attacked)
 
+    def _raze_hills(self, to_raze: List[dict]) -> None:
+        for raze in to_raze:
+            location = raze["location"]
+            hill = self._map.get(f"{location[0]}-{location[1]}", None)
+
+            if not hill:
+                continue
+
+            hill["razed"] = True
+
     def _spawn_ants(self, to_spawn: List[dict]) -> None:
         for ant in to_spawn:
             self._ants[f"{ant['id']}-{ant['owner']}"] = {**ant}
@@ -137,12 +160,11 @@ class AntsGame:
     def _draw_map(self) -> None:
         self._screen.fill(COLOR_LAND)
 
-        for i, row in enumerate(self._map):
-            for j, col in enumerate(row):
-                if col == CHAR_WATER:
-                    self._draw_water(row=i, col=j)
-                elif col.isdigit():
-                    self._draw_hill(row=i, col=j, hill=int(col))
+        for element in self._map.values():
+            if element["type"] == "water":
+                self._draw_water(element["row"], element["col"])
+            elif element["type"] == "hill":
+                self._draw_hill(element["row"], element["col"], element["owner"], element["razed"])
 
     def _draw_ants(self) -> None:
         for ant in self._ants.values():
@@ -162,11 +184,11 @@ class AntsGame:
         scaled_row, scaled_col = self._scale(row, col)
         self._screen.fill(COLOR_WATER, rect=pygame.Rect(scaled_col, scaled_row, self._cell_width, self._cell_height))
 
-    def _draw_hill(self, row: int, col: int, hill: int) -> None:
-        # Draw a circle with a random color based on the hill number
-        self._draw_circle(row, col, self._cell_radius, COLOR_PLAYERS[hill % len(COLOR_PLAYERS)])
-        # And a smaller black circle in the center
-        self._draw_circle(row, col, self._cell_radius // 2, color=(0, 0, 0))
+    def _draw_hill(self, row: int, col: int, owner: int, razed: bool) -> None:
+        # Draw a circle with a random color based on the hill's owner
+        self._draw_circle(row, col, self._cell_radius, COLOR_PLAYERS[owner % len(COLOR_PLAYERS)])
+        # And a smaller circle in the center with with black color if it's "open" and land color if it's razed
+        self._draw_circle(row, col, self._cell_radius // 2, color=(0, 0, 0) if not razed else COLOR_LAND)
 
     def _draw_ant(self, row: int, col: int, owner: int) -> None:
         self._draw_circle(row, col, self._cell_radius // 1.5, color=COLOR_PLAYERS[owner % len(COLOR_PLAYERS)])
