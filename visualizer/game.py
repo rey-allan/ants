@@ -55,6 +55,7 @@ class AntsGame:
         self._attacks = []
         self._ants_to_remove = []
         self._food = {}
+        self._food_to_gather = []
         self._screen = pygame.display.set_mode((self._width, self._height))
         self._clock = pygame.time.Clock()
         self._running = False
@@ -76,14 +77,17 @@ class AntsGame:
             self._attack_ants(turn.get("attack", []))
             self._raze_hills(turn.get("raze", []))
             self._spawn_ants(turn.get("spawn", []))
+            self._gather_food(turn.get("gather", []))
             self._spawn_food(turn.get("food", []))
 
             self._draw_map()
             self._draw_ants()
             self._draw_food()
             self._draw_attacks()
+            self._draw_food_gathering()
 
             self._remove_ants()
+            self._remove_food()
 
             pygame.display.flip()
             self._clock.tick(FPS)
@@ -155,6 +159,23 @@ class AntsGame:
         for ant in to_spawn:
             self._ants[f"{ant['id']}-{ant['owner']}"] = {**ant}
 
+    def _gather_food(self, to_gather: List[dict]) -> None:
+        for gather in to_gather:
+            location = gather["location"]
+            food = self._food.get(f"{location[0]}-{location[1]}", None)
+
+            if not food:
+                continue
+
+            self._food_to_gather.append({"ant": gather["ant"], **food})
+
+    def _remove_food(self) -> None:
+        for food in self._food_to_gather:
+            location = food["location"]
+            del self._food[f"{location[0]}-{location[1]}"]
+
+        self._food_to_gather = []
+
     def _spawn_food(self, to_spawn: List[dict]) -> None:
         for food in to_spawn:
             location = food["location"]
@@ -184,15 +205,18 @@ class AntsGame:
     def _draw_food(self) -> None:
         for food in self._food.values():
             row, col = food["location"]
-            self._draw_square(row, col, width=self._cell_width // 1.7, height=self._cell_height // 1.7, color=COLOR_FOOD)
+            self._draw_square(row, col, width=self._cell_width, height=self._cell_height, color=COLOR_FOOD)
 
     def _draw_attacks(self) -> None:
         for attacker, attacked in self._attacks:
-            attacker_center = self._center(*self._scale(attacker[0], attacker[1]))
-            attacked_center = self._center(*self._scale(attacked[0], attacked[1]))
-            pygame.draw.line(self._screen, color=(0, 0, 0), start_pos=attacker_center, end_pos=attacked_center, width=2)
+            self._draw_centered_line(start=attacker, end=attacked)
 
         self._attacks = []
+
+    def _draw_food_gathering(self) -> None:
+        for food in self._food_to_gather:
+            ant = self._ants.get(f"{food['ant']['id']}-{food['ant']['owner']}", None)
+            self._draw_centered_line(start=ant["location"], end=food["location"])
 
     def _draw_water(self, row: int, col: int) -> None:
         self._draw_square(row, col, width=self._cell_width, height=self._cell_height, color=COLOR_WATER)
@@ -214,6 +238,11 @@ class AntsGame:
     def _draw_square(self, row: int, col: int, width: int, height: int, color: Tuple[int, int, int]) -> None:
         scaled_row, scaled_col = self._scale(row, col)
         self._screen.fill(color, rect=pygame.Rect(scaled_col, scaled_row, width, height))
+
+    def _draw_centered_line(self, start: Tuple[int, int], end: Tuple[int, int]) -> None:
+        start = self._center(*self._scale(*start))
+        end = self._center(*self._scale(*end))
+        pygame.draw.line(self._screen, color=(0, 0, 0), start_pos=start, end_pos=end, width=2)
 
     def _scale(self, row: int, col: int) -> Tuple[int, int]:
         # Calculate the scaled row and column of a cell at the given row and column

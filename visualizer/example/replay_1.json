@@ -157,12 +157,16 @@
         {
           "id": 0,
           "owner": 0,
-          "direction": "N"
-        },
+          "direction": "E"
+        }
+      ]
+    },
+    {
+      "move": [
         {
           "id": 0,
-          "owner": 1,
-          "direction": "S"
+          "owner": 0,
+          "direction": "E"
         }
       ]
     },
@@ -214,10 +218,42 @@
           "id": 0,
           "owner": 0,
           "direction": "N"
+        },
+        {
+          "id": 0,
+          "owner": 1,
+          "direction": "S"
         }
       ]
     },
     {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "N"
+        }
+      ]
+    },
+    {
+      "gather": [
+        {
+          "ant": {
+            "id": 0,
+            "owner": 0
+          },
+          "location": [19, 25]
+        }
+      ]
+    },
+    {
+      "spawn": [
+        {
+          "id": 1,
+          "owner": 0,
+          "location": [28, 19]
+        }
+      ],
       "move": [
         {
           "id": 0,
@@ -232,6 +268,24 @@
           "id": 0,
           "owner": 0,
           "direction": "N"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "W"
+        }
+      ]
+    },
+    {
+      "move": [
+        {
+          "id": 0,
+          "owner": 0,
+          "direction": "W"
         }
       ]
     },
