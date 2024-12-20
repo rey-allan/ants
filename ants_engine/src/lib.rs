@@ -1,14 +1,9 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! # ants_engine
+//!
+//! The core engine for the Ants game.
+//! Inspired by [Google's Ants AI Challenge](http://ants.aichallenge.org/).
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod simulation;
+pub use simulation::Simulation;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod map;
