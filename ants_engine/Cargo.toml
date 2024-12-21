@@ -5,3 +5,7 @@ edition = "2021"
 
 [dependencies]
 regex = "1.11.1"
+
+[dependencies.uuid]
+version = "1.11.0"
+features = ["v4"]
