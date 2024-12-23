@@ -7,6 +7,7 @@ pub enum Cell {
         id: String,
         player: usize,
         is_alive: bool,
+        on_hill: bool,
     },
     Food,
     Hill {
@@ -27,6 +28,7 @@ impl Cell {
                 // Convert char to digit for player number where 'a' is 0 and so on
                 player: value as usize - 'a' as usize,
                 is_alive: true,
+                on_hill: false,
             }),
             '*' => Some(Cell::Food),
             // Max 10 players
@@ -128,11 +130,13 @@ mod tests {
             id,
             player,
             is_alive,
+            on_hill,
         } = map.get(0, 1).as_ref().unwrap()
         {
             assert_eq!(id.len(), 36);
             assert_eq!(player, &1);
             assert_eq!(is_alive, &true);
+            assert_eq!(on_hill, &false);
         } else {
             panic!("Expected an Ant cell at (0, 1)");
         }
