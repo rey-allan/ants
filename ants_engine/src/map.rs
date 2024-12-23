@@ -39,6 +39,7 @@ impl Cell {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Map {
     width: usize,
     height: usize,
