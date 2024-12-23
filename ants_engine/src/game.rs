@@ -1,19 +1,23 @@
-use crate::map::Grid;
+use crate::map::Map;
+use std::fs;
 
 /// The Ants game.
 /// Main entry point for running the game.
 pub struct Game {
-    grid: Grid,
+    map: Map,
 }
 
 impl Game {
-    /// Creates a new game from the string representation of a map.
+    /// Creates a new game from the a map file.
     ///
     /// # Arguments
-    /// * `map` - A string representation of a map.
-    pub fn new(map: &str) -> Game {
-        Game {
-            grid: Grid::parse(map),
+    /// * `map_file` - The path to the file containing the map.
+    pub fn new(map_file: &str) -> Game {
+        match fs::read_to_string(map_file) {
+            Ok(contents) => Game {
+                map: Map::parse(&contents),
+            },
+            Err(e) => panic!("Could not read map file {} due to {}", map_file, e),
         }
     }
 }

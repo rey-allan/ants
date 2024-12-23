@@ -39,38 +39,38 @@ impl Cell {
     }
 }
 
-pub struct Grid {
+pub struct Map {
     width: usize,
     height: usize,
     cells: Vec<Option<Cell>>,
 }
 
-impl Grid {
-    pub fn parse(map: &str) -> Grid {
+impl Map {
+    pub fn parse(map_contents: &str) -> Map {
         let metadata = Regex::new(r"rows (\d+)\s+cols (\d+)")
             .unwrap()
-            .captures(map)
+            .captures(map_contents)
             .unwrap();
 
         let height = metadata.get(1).unwrap().as_str().parse().unwrap();
         let width = metadata.get(2).unwrap().as_str().parse().unwrap();
 
-        let mut grid = Grid::new(width, height);
+        let mut map = Map::new(width, height);
 
         Regex::new(r"m (.*)")
             .unwrap()
-            .captures_iter(map)
+            .captures_iter(map_contents)
             .map(|captures| captures.get(1).unwrap().as_str().trim())
             .enumerate()
             .for_each(|(row, line)| {
                 line.chars().enumerate().for_each(|(col, value)| {
                     if let Some(cell) = Cell::from_char(value) {
-                        grid.set(row, col, cell);
+                        map.set(row, col, cell);
                     }
                 });
             });
 
-        grid
+        map
     }
 
     pub fn get(&self, row: usize, col: usize) -> &Option<Cell> {
@@ -81,8 +81,8 @@ impl Grid {
         self.cells[row * self.width + col] = Some(value);
     }
 
-    fn new(width: usize, height: usize) -> Grid {
-        Grid {
+    fn new(width: usize, height: usize) -> Map {
+        Map {
             width,
             height,
             cells: vec![None; width * height],
@@ -95,17 +95,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn when_parsing_a_map_a_grid_is_created_with_the_correct_width_and_height() {
+    fn when_parsing_a_map_it_is_created_with_the_correct_width_and_height() {
         let map = "\
             rows 2
             cols 2
             players 1
             m ..
             m .0";
-        let grid = Grid::parse(map);
+        let map = Map::parse(map);
 
-        assert_eq!(grid.width, 2);
-        assert_eq!(grid.height, 2);
+        assert_eq!(map.width, 2);
+        assert_eq!(map.height, 2);
     }
 
     #[test]
@@ -116,18 +116,18 @@ mod tests {
             players 1
             m .b.
             m *0%";
-        let grid = Grid::parse(map);
+        let map = Map::parse(map);
 
-        assert!(grid.get(0, 0).is_none());
-        assert_eq!(grid.get(1, 0).as_ref().unwrap(), &Cell::Food);
-        assert_eq!(grid.get(1, 1).as_ref().unwrap(), &Cell::Hill { player: 0 });
-        assert_eq!(grid.get(1, 2).as_ref().unwrap(), &Cell::Water);
+        assert!(map.get(0, 0).is_none());
+        assert_eq!(map.get(1, 0).as_ref().unwrap(), &Cell::Food);
+        assert_eq!(map.get(1, 1).as_ref().unwrap(), &Cell::Hill { player: 0 });
+        assert_eq!(map.get(1, 2).as_ref().unwrap(), &Cell::Water);
 
         if let Cell::Ant {
             id,
             player,
             is_alive,
-        } = grid.get(0, 1).as_ref().unwrap()
+        } = map.get(0, 1).as_ref().unwrap()
         {
             assert_eq!(id.len(), 36);
             assert_eq!(player, &1);
@@ -145,9 +145,9 @@ mod tests {
             players 1
             m ..
             m .0";
-        let mut grid = Grid::parse(map);
-        grid.set(1, 1, Cell::Water);
+        let mut map = Map::parse(map);
+        map.set(1, 1, Cell::Water);
 
-        assert_eq!(grid.get(1, 1).as_ref().unwrap(), &Cell::Water);
+        assert_eq!(map.get(1, 1).as_ref().unwrap(), &Cell::Water);
     }
 }
