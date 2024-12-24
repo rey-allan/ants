@@ -45,7 +45,7 @@ impl Entity {
 pub struct Map {
     width: usize,
     height: usize,
-    entities: Vec<Option<Entity>>,
+    grid: Vec<Option<Entity>>,
 }
 
 impl Map {
@@ -76,20 +76,43 @@ impl Map {
         map
     }
 
+    pub fn get_all_ant_hills(&self) -> Vec<(&Entity, usize, usize)> {
+        self.get_all(|entity| matches!(entity, Entity::Hill { .. }))
+    }
+
     pub fn get(&self, row: usize, col: usize) -> &Option<Entity> {
-        self.entities.get(row * self.width + col).unwrap()
+        self.grid.get(row * self.width + col).unwrap()
     }
 
     pub fn set(&mut self, row: usize, col: usize, value: Entity) {
-        self.entities[row * self.width + col] = Some(value);
+        self.grid[row * self.width + col] = Some(value);
     }
 
     fn new(width: usize, height: usize) -> Map {
         Map {
             width,
             height,
-            entities: vec![None; width * height],
+            grid: vec![None; width * height],
         }
+    }
+
+    fn get_all(&self, filter: fn(&Entity) -> bool) -> Vec<(&Entity, usize, usize)> {
+        // Inefficient way to get all entities using some filter (linear time complexity)
+        // But it's should be fine since maps are small, the largest having roughly 15K or so cells
+        self.grid
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entity)| {
+                if let Some(entity) = entity {
+                    if filter(entity) {
+                        let row = index / self.width;
+                        let col = index % self.width;
+                        return Some((entity, row, col));
+                    }
+                }
+                None
+            })
+            .collect()
     }
 }
 
@@ -154,5 +177,32 @@ mod tests {
         map.set(1, 1, Entity::Water);
 
         assert_eq!(map.get(1, 1).as_ref().unwrap(), &Entity::Water);
+    }
+
+    #[test]
+    fn when_getting_all_ant_hills_the_correct_entities_are_returned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 3
+            m .0.
+            m .1.
+            m .2.";
+        let map = Map::parse(map);
+
+        let ant_hills = map.get_all_ant_hills();
+        assert_eq!(ant_hills.len(), 3);
+
+        assert_eq!(ant_hills[0].0, &Entity::Hill { player: 0 });
+        assert_eq!(ant_hills[0].1, 0);
+        assert_eq!(ant_hills[0].2, 1);
+
+        assert_eq!(ant_hills[1].0, &Entity::Hill { player: 1 });
+        assert_eq!(ant_hills[1].1, 1);
+        assert_eq!(ant_hills[1].2, 1);
+
+        assert_eq!(ant_hills[2].0, &Entity::Hill { player: 2 });
+        assert_eq!(ant_hills[2].1, 2);
+        assert_eq!(ant_hills[2].2, 1);
     }
 }
