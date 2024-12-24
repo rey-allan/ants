@@ -2,7 +2,7 @@ use regex::Regex;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Cell {
+pub enum Entity {
     Ant {
         id: String,
         player: usize,
@@ -16,13 +16,13 @@ pub enum Cell {
     Water,
 }
 
-impl Cell {
-    pub fn from_char(value: char) -> Option<Cell> {
+impl Entity {
+    pub fn from_char(value: char) -> Option<Entity> {
         match value {
-            // Ignore land cells to reduce memory usage
+            // Ignore land entities to reduce memory usage
             '.' => None,
             // Max 10 players
-            'a'..='j' => Some(Cell::Ant {
+            'a'..='j' => Some(Entity::Ant {
                 // Generate a uuid for the ant
                 id: Uuid::new_v4().to_string(),
                 // Convert char to digit for player number where 'a' is 0 and so on
@@ -30,12 +30,12 @@ impl Cell {
                 is_alive: true,
                 on_hill: false,
             }),
-            '*' => Some(Cell::Food),
+            '*' => Some(Entity::Food),
             // Max 10 players
-            '0'..='9' => Some(Cell::Hill {
+            '0'..='9' => Some(Entity::Hill {
                 player: value.to_digit(10).unwrap() as usize,
             }),
-            '%' => Some(Cell::Water),
+            '%' => Some(Entity::Water),
             _ => panic!("Invalid character value: {}", value),
         }
     }
@@ -45,7 +45,7 @@ impl Cell {
 pub struct Map {
     width: usize,
     height: usize,
-    cells: Vec<Option<Cell>>,
+    entities: Vec<Option<Entity>>,
 }
 
 impl Map {
@@ -67,8 +67,8 @@ impl Map {
             .enumerate()
             .for_each(|(row, line)| {
                 line.chars().enumerate().for_each(|(col, value)| {
-                    if let Some(cell) = Cell::from_char(value) {
-                        map.set(row, col, cell);
+                    if let Some(entity) = Entity::from_char(value) {
+                        map.set(row, col, entity);
                     }
                 });
             });
@@ -76,19 +76,19 @@ impl Map {
         map
     }
 
-    pub fn get(&self, row: usize, col: usize) -> &Option<Cell> {
-        self.cells.get(row * self.width + col).unwrap()
+    pub fn get(&self, row: usize, col: usize) -> &Option<Entity> {
+        self.entities.get(row * self.width + col).unwrap()
     }
 
-    pub fn set(&mut self, row: usize, col: usize, value: Cell) {
-        self.cells[row * self.width + col] = Some(value);
+    pub fn set(&mut self, row: usize, col: usize, value: Entity) {
+        self.entities[row * self.width + col] = Some(value);
     }
 
     fn new(width: usize, height: usize) -> Map {
         Map {
             width,
             height,
-            cells: vec![None; width * height],
+            entities: vec![None; width * height],
         }
     }
 }
@@ -112,7 +112,7 @@ mod tests {
     }
 
     #[test]
-    fn when_getting_a_cell_by_row_and_col_the_correct_cell_value_is_returned() {
+    fn when_getting_a_cell_by_row_and_col_the_correct_entity_is_returned() {
         let map = "\
             rows 3
             cols 3
@@ -122,11 +122,11 @@ mod tests {
         let map = Map::parse(map);
 
         assert!(map.get(0, 0).is_none());
-        assert_eq!(map.get(1, 0).as_ref().unwrap(), &Cell::Food);
-        assert_eq!(map.get(1, 1).as_ref().unwrap(), &Cell::Hill { player: 0 });
-        assert_eq!(map.get(1, 2).as_ref().unwrap(), &Cell::Water);
+        assert_eq!(map.get(1, 0).as_ref().unwrap(), &Entity::Food);
+        assert_eq!(map.get(1, 1).as_ref().unwrap(), &Entity::Hill { player: 0 });
+        assert_eq!(map.get(1, 2).as_ref().unwrap(), &Entity::Water);
 
-        if let Cell::Ant {
+        if let Entity::Ant {
             id,
             player,
             is_alive,
@@ -138,12 +138,12 @@ mod tests {
             assert_eq!(is_alive, &true);
             assert_eq!(on_hill, &false);
         } else {
-            panic!("Expected an Ant cell at (0, 1)");
+            panic!("Expected an Ant Entity at (0, 1)");
         }
     }
 
     #[test]
-    fn when_setting_the_value_of_a_cell_the_cell_is_correctly_updated() {
+    fn when_setting_the_value_of_an_entity_the_entity_is_correctly_updated() {
         let map = "\
             rows 2
             cols 2
@@ -151,8 +151,8 @@ mod tests {
             m ..
             m .0";
         let mut map = Map::parse(map);
-        map.set(1, 1, Cell::Water);
+        map.set(1, 1, Entity::Water);
 
-        assert_eq!(map.get(1, 1).as_ref().unwrap(), &Cell::Water);
+        assert_eq!(map.get(1, 1).as_ref().unwrap(), &Entity::Water);
     }
 }

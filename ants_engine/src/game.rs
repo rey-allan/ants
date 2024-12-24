@@ -33,7 +33,7 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::Cell;
+    use crate::map::Entity;
     use std::path::Path;
 
     #[test]
@@ -41,7 +41,7 @@ mod tests {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
         let mut game = Game::new(map_file.to_str().unwrap());
 
-        game.map.set(0, 0, Cell::Food);
+        game.map.set(0, 0, Entity::Food);
         game.start();
 
         assert_eq!(game.map, game.starting_map);
