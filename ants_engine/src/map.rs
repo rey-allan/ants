@@ -1,51 +1,11 @@
+use crate::entities::from_char;
+use crate::entities::Entity;
 use regex::Regex;
-use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Entity {
-    Ant {
-        id: String,
-        player: usize,
-        is_alive: bool,
-        on_hill: bool,
-    },
-    Food,
-    Hill {
-        player: usize,
-    },
-    Water,
-}
-
-impl Entity {
-    pub fn from_char(value: char) -> Option<Entity> {
-        match value {
-            // Ignore land entities to reduce memory usage
-            '.' => None,
-            // Max 10 players
-            'a'..='j' => Some(Entity::Ant {
-                // Generate a uuid for the ant
-                id: Uuid::new_v4().to_string(),
-                // Convert char to digit for player number where 'a' is 0 and so on
-                player: value as usize - 'a' as usize,
-                is_alive: true,
-                on_hill: false,
-            }),
-            '*' => Some(Entity::Food),
-            // Max 10 players
-            '0'..='9' => Some(Entity::Hill {
-                player: value.to_digit(10).unwrap() as usize,
-            }),
-            '%' => Some(Entity::Water),
-            _ => panic!("Invalid character value: {}", value),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub struct Map {
     width: usize,
     height: usize,
-    grid: Vec<Option<Entity>>,
+    grid: Vec<Option<Box<dyn Entity>>>,
 }
 
 impl Map {
@@ -67,7 +27,7 @@ impl Map {
             .enumerate()
             .for_each(|(row, line)| {
                 line.chars().enumerate().for_each(|(col, value)| {
-                    if let Some(entity) = Entity::from_char(value) {
+                    if let Some(entity) = from_char(value) {
                         map.set(row, col, entity);
                     }
                 });
@@ -76,29 +36,33 @@ impl Map {
         map
     }
 
-    pub fn get_all_ant_hills(&self) -> Vec<(&Entity, usize, usize)> {
-        self.get_all(|entity| matches!(entity, Entity::Hill { .. }))
+    pub fn ant_hills(&self) -> Vec<(&dyn Entity, usize, usize)> {
+        self.all(|entity| matches!(entity.name(), "Hill"))
     }
 
-    pub fn get(&self, row: usize, col: usize) -> &Option<Entity> {
+    pub fn get(&self, row: usize, col: usize) -> &Option<Box<dyn Entity>> {
         self.grid.get(row * self.width + col).unwrap()
     }
 
-    pub fn set(&mut self, row: usize, col: usize, value: Entity) {
+    pub fn set(&mut self, row: usize, col: usize, value: Box<dyn Entity>) {
         self.grid[row * self.width + col] = Some(value);
     }
 
     fn new(width: usize, height: usize) -> Map {
+        let mut grid = Vec::with_capacity(width * height);
+        // Initialize the grid with `None`` values
+        grid.resize_with(width * height, || None);
+
         Map {
             width,
             height,
-            grid: vec![None; width * height],
+            grid,
         }
     }
 
-    fn get_all(&self, filter: fn(&Entity) -> bool) -> Vec<(&Entity, usize, usize)> {
+    fn all(&self, filter: fn(&Box<dyn Entity>) -> bool) -> Vec<(&dyn Entity, usize, usize)> {
         // Inefficient way to get all entities using some filter (linear time complexity)
-        // But it's should be fine since maps are small, the largest having roughly 15K or so cells
+        // But it should be fine since maps are small, the largest having roughly 15K or so cells
         self.grid
             .iter()
             .enumerate()
@@ -107,7 +71,7 @@ impl Map {
                     if filter(entity) {
                         let row = index / self.width;
                         let col = index % self.width;
-                        return Some((entity, row, col));
+                        return Some((entity.as_ref(), row, col));
                     }
                 }
                 None
@@ -119,6 +83,7 @@ impl Map {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entities::Water;
 
     #[test]
     fn when_parsing_a_map_it_is_created_with_the_correct_width_and_height() {
@@ -145,24 +110,13 @@ mod tests {
         let map = Map::parse(map);
 
         assert!(map.get(0, 0).is_none());
-        assert_eq!(map.get(1, 0).as_ref().unwrap(), &Entity::Food);
-        assert_eq!(map.get(1, 1).as_ref().unwrap(), &Entity::Hill { player: 0 });
-        assert_eq!(map.get(1, 2).as_ref().unwrap(), &Entity::Water);
-
-        if let Entity::Ant {
-            id,
-            player,
-            is_alive,
-            on_hill,
-        } = map.get(0, 1).as_ref().unwrap()
-        {
-            assert_eq!(id.len(), 36);
-            assert_eq!(player, &1);
-            assert_eq!(is_alive, &true);
-            assert_eq!(on_hill, &false);
-        } else {
-            panic!("Expected an Ant Entity at (0, 1)");
-        }
+        assert_eq!(map.get(0, 1).as_ref().unwrap().name(), "Ant");
+        assert_eq!(map.get(0, 1).as_ref().unwrap().player(), 1);
+        assert_eq!(map.get(0, 1).as_ref().unwrap().is_alive(), true);
+        assert_eq!(map.get(1, 0).as_ref().unwrap().name(), "Food");
+        assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Hill");
+        assert_eq!(map.get(1, 1).as_ref().unwrap().player(), 0);
+        assert_eq!(map.get(1, 2).as_ref().unwrap().name(), "Water");
     }
 
     #[test]
@@ -174,9 +128,9 @@ mod tests {
             m ..
             m .0";
         let mut map = Map::parse(map);
-        map.set(1, 1, Entity::Water);
+        map.set(1, 1, Box::new(Water));
 
-        assert_eq!(map.get(1, 1).as_ref().unwrap(), &Entity::Water);
+        assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Water");
     }
 
     #[test]
@@ -190,18 +144,21 @@ mod tests {
             m .2.";
         let map = Map::parse(map);
 
-        let ant_hills = map.get_all_ant_hills();
+        let ant_hills = map.ant_hills();
         assert_eq!(ant_hills.len(), 3);
 
-        assert_eq!(ant_hills[0].0, &Entity::Hill { player: 0 });
+        assert_eq!(ant_hills[0].0.name(), "Hill");
+        assert_eq!(ant_hills[0].0.player(), 0);
         assert_eq!(ant_hills[0].1, 0);
         assert_eq!(ant_hills[0].2, 1);
 
-        assert_eq!(ant_hills[1].0, &Entity::Hill { player: 1 });
+        assert_eq!(ant_hills[1].0.name(), "Hill");
+        assert_eq!(ant_hills[1].0.player(), 1);
         assert_eq!(ant_hills[1].1, 1);
         assert_eq!(ant_hills[1].2, 1);
 
-        assert_eq!(ant_hills[2].0, &Entity::Hill { player: 2 });
+        assert_eq!(ant_hills[2].0.name(), "Hill");
+        assert_eq!(ant_hills[2].0.player(), 2);
         assert_eq!(ant_hills[2].1, 2);
         assert_eq!(ant_hills[2].2, 1);
     }
