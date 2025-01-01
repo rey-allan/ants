@@ -5,7 +5,7 @@ use std::fs;
 /// Main entry point for running the game.
 pub struct Game {
     map: Map,
-    starting_map: Map,
+    map_contents: String,
 }
 
 impl Game {
@@ -17,7 +17,7 @@ impl Game {
         match fs::read_to_string(map_file) {
             Ok(contents) => Game {
                 map: Map::parse(&contents),
-                starting_map: Map::parse(&contents),
+                map_contents: contents,
             },
             Err(e) => panic!("Could not read map file {} due to: {}", map_file, e),
         }
@@ -25,7 +25,7 @@ impl Game {
 
     /// Starts the game.
     pub fn start(&mut self) {
-        // TODO: Reset the map to the starting state
+        self.map = Map::parse(&self.map_contents);
     }
 }
 
@@ -43,6 +43,7 @@ mod tests {
         game.map.set(0, 0, Box::new(Food));
         game.start();
 
-        // TODO: Assert that the map is reset to the starting state
+        // The example map has water at (0, 0)
+        assert_eq!(game.map.get(0, 0).as_ref().unwrap().name(), "Water");
     }
 }
