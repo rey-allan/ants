@@ -40,6 +40,39 @@ impl Map {
         self.all(|entity| matches!(entity.name(), "Hill"))
     }
 
+    pub fn land_around(&self, row: usize, col: usize) -> Vec<(usize, usize)> {
+        // For each coordinate around the given one, check if the cell is empty
+        // If it is, add it to the list of coordinates
+        let mut lands = Vec::new();
+
+        // For each coordinate around the given one in all 8 directions
+        for i in -1..=1 {
+            for j in -1..=1 {
+                let n_row = row as i32 + i;
+                let n_col = col as i32 + j;
+
+                // Skip if the coordinate is out of bounds
+                if n_row < 0
+                    || n_row >= self.height as i32
+                    || n_col < 0
+                    || n_col >= self.width as i32
+                {
+                    continue;
+                }
+
+                // Skip if the cell is not empty
+                if self.get(n_row as usize, n_col as usize).is_some() {
+                    continue;
+                }
+
+                // If the cell is empty then it's land
+                lands.push((n_row as usize, n_col as usize));
+            }
+        }
+
+        lands
+    }
+
     pub fn get(&self, row: usize, col: usize) -> &Option<Box<dyn Entity>> {
         self.grid.get(row * self.width + col).unwrap()
     }
@@ -50,7 +83,7 @@ impl Map {
 
     fn new(width: usize, height: usize) -> Map {
         let mut grid = Vec::with_capacity(width * height);
-        // Initialize the grid with `None`` values
+        // Initialize the grid with `None` values
         grid.resize_with(width * height, || None);
 
         Map {
@@ -112,7 +145,7 @@ mod tests {
         assert!(map.get(0, 0).is_none());
         assert_eq!(map.get(0, 1).as_ref().unwrap().name(), "Ant");
         assert_eq!(map.get(0, 1).as_ref().unwrap().player(), 1);
-        assert_eq!(map.get(0, 1).as_ref().unwrap().is_alive(), true);
+        assert!(map.get(0, 1).as_ref().unwrap().is_alive());
         assert_eq!(map.get(1, 0).as_ref().unwrap().name(), "Food");
         assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Hill");
         assert_eq!(map.get(1, 1).as_ref().unwrap().player(), 0);
@@ -161,5 +194,84 @@ mod tests {
         assert_eq!(ant_hills[2].0.player(), 2);
         assert_eq!(ant_hills[2].1, 2);
         assert_eq!(ant_hills[2].2, 1);
+    }
+
+    #[test]
+    fn when_getting_all_land_around_a_middle_cell_the_correct_coordinates_are_returned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .0.
+            m ...";
+        let map = Map::parse(map);
+
+        let lands = map.land_around(1, 1);
+        let expected_lands = vec![
+            (0, 0),
+            (0, 1),
+            (0, 2),
+            (1, 0),
+            (1, 2),
+            (2, 0),
+            (2, 1),
+            (2, 2),
+        ];
+
+        assert_eq!(lands.len(), 8);
+        assert_eq!(lands, expected_lands);
+    }
+
+    #[test]
+    fn when_getting_all_land_around_an_edge_cell_the_correct_coordinates_are_returned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m ...
+            m .0.";
+        let map = Map::parse(map);
+
+        let lands = map.land_around(2, 1);
+        let expected_lands = vec![(1, 0), (1, 1), (1, 2), (2, 0), (2, 2)];
+
+        assert_eq!(lands.len(), 5);
+        assert_eq!(lands, expected_lands);
+    }
+
+    #[test]
+    fn when_getting_all_land_around_a_corner_cell_the_correct_coordinates_are_returned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m 0..
+            m ...
+            m ...";
+        let map = Map::parse(map);
+
+        let lands = map.land_around(0, 0);
+        let expected_lands = vec![(0, 1), (1, 0), (1, 1)];
+
+        assert_eq!(lands.len(), 3);
+        assert_eq!(lands, expected_lands);
+    }
+
+    #[test]
+    fn when_getting_all_land_around_a_cell_with_no_land_no_coordinates_are_returned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m .*0
+            m .**
+            m ...";
+        let map = Map::parse(map);
+
+        let lands = map.land_around(0, 2);
+
+        assert_eq!(lands.len(), 0);
     }
 }
