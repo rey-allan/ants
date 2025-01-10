@@ -36,6 +36,14 @@ impl Map {
         map
     }
 
+    pub fn get(&self, row: usize, col: usize) -> &Option<Box<dyn Entity>> {
+        self.grid.get(row * self.width + col).unwrap()
+    }
+
+    pub fn set(&mut self, row: usize, col: usize, value: Box<dyn Entity>) {
+        self.grid[row * self.width + col] = Some(value);
+    }
+
     pub fn ant_hills(&self) -> Vec<(&dyn Entity, usize, usize)> {
         self.all(|entity| matches!(entity.name(), "Hill"))
     }
@@ -73,12 +81,36 @@ impl Map {
         lands
     }
 
-    pub fn get(&self, row: usize, col: usize) -> &Option<Box<dyn Entity>> {
-        self.grid.get(row * self.width + col).unwrap()
-    }
+    pub fn field_of_vision(
+        &self,
+        center: (usize, usize),
+        radius: usize,
+    ) -> Vec<(&dyn Entity, usize, usize)> {
+        let (row, col) = center;
+        let mut fov = Vec::new();
 
-    pub fn set(&mut self, row: usize, col: usize, value: Box<dyn Entity>) {
-        self.grid[row * self.width + col] = Some(value);
+        // Compute the field of vision around the center coordinate
+        // These are all the entities that are within the radius of the center
+        // i.e. the entities whose coordinates are at most `radius` distance away from the center
+        // using the euclidean distance formula: (x1 - x2)^2 + (y1 - y2)^2 <= radius^2
+        for i in row.saturating_sub(radius)..=(row + radius).min(self.height - 1) {
+            for j in col.saturating_sub(radius)..=(col + radius).min(self.width - 1) {
+                if (i as i32 - row as i32).pow(2) + (j as i32 - col as i32).pow(2)
+                    <= radius.pow(2) as i32
+                {
+                    // Skip the given center coordinate
+                    if i == row && j == col {
+                        continue;
+                    }
+
+                    if let Some(entity) = self.get(i, j) {
+                        fov.push((entity.as_ref(), i, j));
+                    }
+                }
+            }
+        }
+
+        fov
     }
 
     fn new(width: usize, height: usize) -> Map {
@@ -273,5 +305,33 @@ mod tests {
         let lands = map.land_around(0, 2);
 
         assert_eq!(lands.len(), 0);
+    }
+
+    #[test]
+    fn when_getting_the_field_of_vision_of_a_cell_the_correct_entities_are_returned() {
+        let map = "\
+            rows 5
+            cols 5
+            players 1
+            m ..*..
+            m .0*%.
+            m .*a.%
+            m .1...
+            m ..*..";
+        let map = Map::parse(map);
+
+        let fov = map.field_of_vision((2, 2), 2);
+
+        assert_eq!(fov.len(), 8);
+        assert_eq!(map.get(0, 2).as_ref().unwrap().name(), "Food");
+        assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Hill");
+        assert_eq!(map.get(1, 1).as_ref().unwrap().player(), 0);
+        assert_eq!(map.get(1, 2).as_ref().unwrap().name(), "Food");
+        assert_eq!(map.get(1, 3).as_ref().unwrap().name(), "Water");
+        assert_eq!(map.get(2, 1).as_ref().unwrap().name(), "Food");
+        assert_eq!(map.get(2, 4).as_ref().unwrap().name(), "Water");
+        assert_eq!(map.get(3, 1).as_ref().unwrap().name(), "Hill");
+        assert_eq!(map.get(3, 1).as_ref().unwrap().player(), 1);
+        assert_eq!(map.get(4, 2).as_ref().unwrap().name(), "Food");
     }
 }
