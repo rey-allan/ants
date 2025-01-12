@@ -5,6 +5,7 @@ use regex::Regex;
 pub struct Map {
     width: usize,
     height: usize,
+    players: usize,
     grid: Vec<Option<Box<dyn Entity>>>,
 }
 
@@ -18,7 +19,17 @@ impl Map {
         let height = metadata.get(1).unwrap().as_str().parse().unwrap();
         let width = metadata.get(2).unwrap().as_str().parse().unwrap();
 
-        let mut map = Map::new(width, height);
+        let players = Regex::new(r"players (\d+)")
+            .unwrap()
+            .captures(map_contents)
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .as_str()
+            .parse()
+            .unwrap();
+
+        let mut map = Map::new(width, height, players);
 
         Regex::new(r"m (.*)")
             .unwrap()
@@ -117,7 +128,7 @@ impl Map {
         fov
     }
 
-    fn new(width: usize, height: usize) -> Map {
+    fn new(width: usize, height: usize, players: usize) -> Map {
         let mut grid = Vec::with_capacity(width * height);
         // Initialize the grid with `None` values
         grid.resize_with(width * height, || None);
@@ -125,6 +136,7 @@ impl Map {
         Map {
             width,
             height,
+            players,
             grid,
         }
     }
@@ -155,7 +167,7 @@ mod tests {
     use crate::entities::Water;
 
     #[test]
-    fn when_parsing_a_map_it_is_created_with_the_correct_width_and_height() {
+    fn when_parsing_a_map_it_is_created_with_the_correct_width_height_and_players() {
         let map = "\
             rows 2
             cols 2
@@ -166,6 +178,7 @@ mod tests {
 
         assert_eq!(map.width, 2);
         assert_eq!(map.height, 2);
+        assert_eq!(map.players, 1);
     }
 
     #[test]
