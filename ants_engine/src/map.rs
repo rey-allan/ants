@@ -180,11 +180,11 @@ mod tests {
 
         assert!(map.get(0, 0).is_none());
         assert_eq!(map.get(0, 1).as_ref().unwrap().name(), "Ant");
-        assert_eq!(map.get(0, 1).as_ref().unwrap().player(), 1);
-        assert!(map.get(0, 1).as_ref().unwrap().is_alive());
+        assert_eq!(map.get(0, 1).as_ref().unwrap().player().unwrap(), 1);
+        assert!(map.get(0, 1).as_ref().unwrap().is_alive().unwrap());
         assert_eq!(map.get(1, 0).as_ref().unwrap().name(), "Food");
         assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Hill");
-        assert_eq!(map.get(1, 1).as_ref().unwrap().player(), 0);
+        assert_eq!(map.get(1, 1).as_ref().unwrap().player().unwrap(), 0);
         assert_eq!(map.get(1, 2).as_ref().unwrap().name(), "Water");
     }
 
@@ -217,17 +217,17 @@ mod tests {
         assert_eq!(ant_hills.len(), 3);
 
         assert_eq!(ant_hills[0].0.name(), "Hill");
-        assert_eq!(ant_hills[0].0.player(), 0);
+        assert_eq!(ant_hills[0].0.player().unwrap(), 0);
         assert_eq!(ant_hills[0].1, 0);
         assert_eq!(ant_hills[0].2, 1);
 
         assert_eq!(ant_hills[1].0.name(), "Hill");
-        assert_eq!(ant_hills[1].0.player(), 1);
+        assert_eq!(ant_hills[1].0.player().unwrap(), 1);
         assert_eq!(ant_hills[1].1, 1);
         assert_eq!(ant_hills[1].2, 1);
 
         assert_eq!(ant_hills[2].0.name(), "Hill");
-        assert_eq!(ant_hills[2].0.player(), 2);
+        assert_eq!(ant_hills[2].0.player().unwrap(), 2);
         assert_eq!(ant_hills[2].1, 2);
         assert_eq!(ant_hills[2].2, 1);
     }
@@ -247,17 +247,17 @@ mod tests {
         assert_eq!(ants.len(), 3);
 
         assert_eq!(ants[0].0.name(), "Ant");
-        assert_eq!(ants[0].0.player(), 0);
+        assert_eq!(ants[0].0.player().unwrap(), 0);
         assert_eq!(ants[0].1, 0);
         assert_eq!(ants[0].2, 2);
 
         assert_eq!(ants[1].0.name(), "Ant");
-        assert_eq!(ants[1].0.player(), 1);
+        assert_eq!(ants[1].0.player().unwrap(), 1);
         assert_eq!(ants[1].1, 1);
         assert_eq!(ants[1].2, 0);
 
         assert_eq!(ants[2].0.name(), "Ant");
-        assert_eq!(ants[2].0.player(), 2);
+        assert_eq!(ants[2].0.player().unwrap(), 2);
         assert_eq!(ants[2].1, 2);
         assert_eq!(ants[2].2, 1);
     }
@@ -359,13 +359,13 @@ mod tests {
         assert_eq!(fov.len(), 8);
         assert_eq!(map.get(0, 2).as_ref().unwrap().name(), "Food");
         assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Hill");
-        assert_eq!(map.get(1, 1).as_ref().unwrap().player(), 0);
+        assert_eq!(map.get(1, 1).as_ref().unwrap().player().unwrap(), 0);
         assert_eq!(map.get(1, 2).as_ref().unwrap().name(), "Food");
         assert_eq!(map.get(1, 3).as_ref().unwrap().name(), "Water");
         assert_eq!(map.get(2, 1).as_ref().unwrap().name(), "Food");
         assert_eq!(map.get(2, 4).as_ref().unwrap().name(), "Water");
         assert_eq!(map.get(3, 1).as_ref().unwrap().name(), "Hill");
-        assert_eq!(map.get(3, 1).as_ref().unwrap().player(), 1);
+        assert_eq!(map.get(3, 1).as_ref().unwrap().player().unwrap(), 1);
         assert_eq!(map.get(4, 2).as_ref().unwrap().name(), "Food");
     }
 }

@@ -10,12 +10,12 @@ pub trait Entity {
         "Entity"
     }
 
-    fn player(&self) -> usize {
-        usize::MAX
+    fn player(&self) -> Option<usize> {
+        None
     }
 
-    fn is_alive(&self) -> bool {
-        false
+    fn is_alive(&self) -> Option<bool> {
+        None
     }
 
     fn set_alive(&mut self, _value: bool) {}
@@ -48,12 +48,12 @@ impl Entity for Ant {
         &self.id
     }
 
-    fn player(&self) -> usize {
-        self.player
+    fn player(&self) -> Option<usize> {
+        Some(self.player)
     }
 
-    fn is_alive(&self) -> bool {
-        self.is_alive
+    fn is_alive(&self) -> Option<bool> {
+        Some(self.is_alive)
     }
 
     fn set_alive(&mut self, value: bool) {
@@ -79,8 +79,8 @@ impl Hill {
 }
 
 impl Entity for Hill {
-    fn player(&self) -> usize {
-        self.player
+    fn player(&self) -> Option<usize> {
+        Some(self.player)
     }
 }
 

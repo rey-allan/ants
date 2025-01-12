@@ -35,7 +35,7 @@ impl Game {
             .map
             .ant_hills()
             .into_iter()
-            .map(|(hill, row, col)| (hill.player(), row, col))
+            .map(|(hill, row, col)| (hill.player().unwrap(), row, col))
             .collect();
 
         // For each ant hill, collect up to 3 random land cells around it
@@ -102,16 +102,16 @@ mod tests {
         // The example map has 1 ant hill at (0, 1) for player 1
         let ant = game.map.get(0, 1).as_ref().unwrap();
         assert_eq!(ant.name(), "Ant");
-        assert_eq!(ant.player(), 1);
-        assert!(ant.is_alive());
-        assert_eq!(ant.on_ant_hill().as_ref().unwrap().player(), 1);
+        assert_eq!(ant.player().unwrap(), 1);
+        assert!(ant.is_alive().unwrap());
+        assert_eq!(ant.on_ant_hill().as_ref().unwrap().player().unwrap(), 1);
 
         // The example map has 1 ant hill at (3, 2) for player 0
         let ant = game.map.get(3, 2).as_ref().unwrap();
         assert_eq!(ant.name(), "Ant");
-        assert_eq!(ant.player(), 0);
-        assert!(ant.is_alive());
-        assert_eq!(ant.on_ant_hill().as_ref().unwrap().player(), 0);
+        assert_eq!(ant.player().unwrap(), 0);
+        assert!(ant.is_alive().unwrap());
+        assert_eq!(ant.on_ant_hill().as_ref().unwrap().player().unwrap(), 0);
     }
 
     #[test]
