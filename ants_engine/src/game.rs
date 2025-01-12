@@ -12,6 +12,29 @@ pub struct Game {
     map_contents: String,
 }
 
+struct StateEntity {
+    name: String,
+    row: usize,
+    col: usize,
+    player: Option<usize>,
+    alive: Option<bool>,
+}
+
+struct PlayerAnt {
+    id: String,
+    row: usize,
+    col: usize,
+    player: usize,
+    alive: bool,
+    field_of_view: Vec<StateEntity>,
+}
+
+struct GameState {
+    turn: usize,
+    scores: Vec<usize>,
+    ants: Vec<Vec<PlayerAnt>>,
+}
+
 impl Game {
     /// Creates a new game from the a map file.
     ///
@@ -103,14 +126,14 @@ mod tests {
         let ant = game.map.get(0, 1).as_ref().unwrap();
         assert_eq!(ant.name(), "Ant");
         assert_eq!(ant.player().unwrap(), 1);
-        assert!(ant.is_alive().unwrap());
+        assert!(ant.alive().unwrap());
         assert_eq!(ant.on_ant_hill().as_ref().unwrap().player().unwrap(), 1);
 
         // The example map has 1 ant hill at (3, 2) for player 0
         let ant = game.map.get(3, 2).as_ref().unwrap();
         assert_eq!(ant.name(), "Ant");
         assert_eq!(ant.player().unwrap(), 0);
-        assert!(ant.is_alive().unwrap());
+        assert!(ant.alive().unwrap());
         assert_eq!(ant.on_ant_hill().as_ref().unwrap().player().unwrap(), 0);
     }
 

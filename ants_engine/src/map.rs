@@ -194,7 +194,7 @@ mod tests {
         assert!(map.get(0, 0).is_none());
         assert_eq!(map.get(0, 1).as_ref().unwrap().name(), "Ant");
         assert_eq!(map.get(0, 1).as_ref().unwrap().player().unwrap(), 1);
-        assert!(map.get(0, 1).as_ref().unwrap().is_alive().unwrap());
+        assert!(map.get(0, 1).as_ref().unwrap().alive().unwrap());
         assert_eq!(map.get(1, 0).as_ref().unwrap().name(), "Food");
         assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Hill");
         assert_eq!(map.get(1, 1).as_ref().unwrap().player().unwrap(), 0);

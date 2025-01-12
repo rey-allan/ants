@@ -14,7 +14,7 @@ pub trait Entity {
         None
     }
 
-    fn is_alive(&self) -> Option<bool> {
+    fn alive(&self) -> Option<bool> {
         None
     }
 
@@ -28,7 +28,7 @@ pub trait Entity {
 pub struct Ant {
     id: String,
     player: usize,
-    is_alive: bool,
+    alive: bool,
     on_ant_hill: Option<Box<dyn Entity>>,
 }
 
@@ -37,7 +37,7 @@ impl Ant {
         Ant {
             id: Uuid::new_v4().to_string(),
             player,
-            is_alive: true,
+            alive: true,
             on_ant_hill: Some(ant_hill),
         }
     }
@@ -52,12 +52,12 @@ impl Entity for Ant {
         Some(self.player)
     }
 
-    fn is_alive(&self) -> Option<bool> {
-        Some(self.is_alive)
+    fn alive(&self) -> Option<bool> {
+        Some(self.alive)
     }
 
     fn set_alive(&mut self, value: bool) {
-        self.is_alive = value;
+        self.alive = value;
     }
 
     fn on_ant_hill(&self) -> &Option<Box<dyn Entity>> {
@@ -97,7 +97,7 @@ pub fn from_char(value: char) -> Option<Box<dyn Entity>> {
             id: Uuid::new_v4().to_string(),
             // Convert char to digit for player number where 'a' is 0 and so on
             player: value as usize - 'a' as usize,
-            is_alive: true,
+            alive: true,
             on_ant_hill: None,
         })),
         '*' => Some(Box::new(Food)),
