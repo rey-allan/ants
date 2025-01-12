@@ -48,6 +48,10 @@ impl Map {
         self.all(|entity| matches!(entity.name(), "Hill"))
     }
 
+    pub fn ants(&self) -> Vec<(&dyn Entity, usize, usize)> {
+        self.all(|entity| matches!(entity.name(), "Ant"))
+    }
+
     pub fn land_around(&self, row: usize, col: usize) -> Vec<(usize, usize)> {
         // For each coordinate around the given one, check if the cell is empty
         // If it is, add it to the list of coordinates
@@ -226,6 +230,36 @@ mod tests {
         assert_eq!(ant_hills[2].0.player(), 2);
         assert_eq!(ant_hills[2].1, 2);
         assert_eq!(ant_hills[2].2, 1);
+    }
+
+    #[test]
+    fn when_getting_all_ants_the_correct_entities_are_returned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 3
+            m ..a
+            m b..
+            m .c.";
+        let map = Map::parse(map);
+
+        let ants = map.ants();
+        assert_eq!(ants.len(), 3);
+
+        assert_eq!(ants[0].0.name(), "Ant");
+        assert_eq!(ants[0].0.player(), 0);
+        assert_eq!(ants[0].1, 0);
+        assert_eq!(ants[0].2, 2);
+
+        assert_eq!(ants[1].0.name(), "Ant");
+        assert_eq!(ants[1].0.player(), 1);
+        assert_eq!(ants[1].1, 1);
+        assert_eq!(ants[1].2, 0);
+
+        assert_eq!(ants[2].0.name(), "Ant");
+        assert_eq!(ants[2].0.player(), 2);
+        assert_eq!(ants[2].1, 2);
+        assert_eq!(ants[2].2, 1);
     }
 
     #[test]
