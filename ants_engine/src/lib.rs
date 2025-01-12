@@ -5,6 +5,7 @@
 
 pub mod game;
 pub use game::Game;
+pub use game::GameState;
 
 mod entities;
 mod map;

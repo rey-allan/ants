@@ -55,6 +55,10 @@ impl Map {
         self.grid[row * self.width + col] = Some(value);
     }
 
+    pub fn players(&self) -> usize {
+        self.players
+    }
+
     pub fn ant_hills(&self) -> Vec<(&dyn Entity, usize, usize)> {
         self.all(|entity| matches!(entity.name(), "Hill"))
     }

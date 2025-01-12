@@ -1,4 +1,5 @@
 use crate::entities::Ant;
+use crate::entities::Entity;
 use crate::entities::Food;
 use crate::entities::Hill;
 use crate::map::Map;
@@ -10,8 +11,22 @@ use std::fs;
 pub struct Game {
     map: Map,
     map_contents: String,
+    fov_radius: usize,
+    turn: usize,
+    scores: Vec<usize>,
 }
 
+/// Represents the state of the game.
+pub struct GameState {
+    /// The current turn.
+    turn: usize,
+    /// The scores for each player where the index is the player number.
+    scores: Vec<usize>,
+    /// The ants for each player where the index is the player number.
+    ants: Vec<Vec<PlayerAnt>>,
+}
+
+#[derive(Clone)]
 struct StateEntity {
     name: String,
     row: usize,
@@ -20,38 +35,43 @@ struct StateEntity {
     alive: Option<bool>,
 }
 
+#[derive(Clone)]
 struct PlayerAnt {
     id: String,
     row: usize,
     col: usize,
     player: usize,
     alive: bool,
-    field_of_view: Vec<StateEntity>,
-}
-
-struct GameState {
-    turn: usize,
-    scores: Vec<usize>,
-    ants: Vec<Vec<PlayerAnt>>,
+    field_of_vision: Vec<StateEntity>,
 }
 
 impl Game {
-    /// Creates a new game from the a map file.
+    /// Creates a new game.
     ///
     /// # Arguments
     /// * `map_file` - The path to the file containing the map.
-    pub fn new(map_file: &str) -> Game {
+    /// * `fov_radius` - The radius of the field of vision for each ant.
+    pub fn new(map_file: &str, fov_radius: usize) -> Game {
         match fs::read_to_string(map_file) {
-            Ok(contents) => Game {
-                map: Map::parse(&contents),
-                map_contents: contents,
-            },
+            Ok(contents) => {
+                let map = Map::parse(&contents);
+                let players = map.players();
+
+                Game {
+                    map,
+                    map_contents: contents,
+                    fov_radius,
+                    turn: 0,
+                    scores: vec![0; players],
+                }
+            }
             Err(e) => panic!("Could not read map file {} due to: {}", map_file, e),
         }
     }
 
     /// Starts the game.
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> GameState {
+        self.turn = 0;
         self.map = Map::parse(&self.map_contents);
 
         let ant_hills: Vec<(usize, usize, usize)> = self
@@ -78,6 +98,42 @@ impl Game {
         spawn_ants(&mut self.map, ant_hills);
         // Spawn food on the random land cells
         spawn_food(&mut self.map, lands);
+
+        // Compute the intial game state
+        self.game_state()
+    }
+
+    fn game_state(&self) -> GameState {
+        let players = self.map.players();
+        let ants = self
+            .map
+            .ants()
+            .into_iter()
+            .filter(|(ant, _, _)| ant.alive().unwrap())
+            .map(|(ant, row, col)| PlayerAnt {
+                id: ant.id().to_string(),
+                row,
+                col,
+                player: ant.player().unwrap(),
+                alive: ant.alive().unwrap(),
+                field_of_vision: self
+                    .map
+                    .field_of_vision((row, col), self.fov_radius)
+                    .into_iter()
+                    .map(|(entity, row, col)| to_state_entity(entity, row, col))
+                    .collect(),
+            })
+            // Group ants by player
+            .fold(vec![vec![]; players], |mut acc, ant| {
+                acc[ant.player].push(ant);
+                acc
+            });
+
+        GameState {
+            turn: self.turn,
+            scores: self.scores.clone(),
+            ants,
+        }
     }
 }
 
@@ -97,6 +153,16 @@ fn spawn_food(map: &mut Map, locations: Vec<(usize, usize)>) {
     }
 }
 
+fn to_state_entity(entity: &dyn Entity, row: usize, col: usize) -> StateEntity {
+    StateEntity {
+        name: entity.name().to_string(),
+        row,
+        col,
+        player: entity.player(),
+        alive: entity.alive(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,7 +172,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_the_map_is_reset() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap());
+        let mut game = Game::new(map_file.to_str().unwrap(), 2);
 
         game.map.set(0, 0, Box::new(Food));
         game.start();
@@ -118,7 +184,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_ants_are_spawned_on_ant_hills() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap());
+        let mut game = Game::new(map_file.to_str().unwrap(), 2);
 
         game.start();
 
@@ -140,7 +206,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_food_is_spawned_around_land_locations_for_each_ant_hill() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap());
+        let mut game = Game::new(map_file.to_str().unwrap(), 2);
 
         game.start();
 
@@ -155,5 +221,47 @@ mod tests {
         assert_eq!(game.map.get(2, 1).as_ref().unwrap().name(), "Food");
         assert_eq!(game.map.get(2, 2).as_ref().unwrap().name(), "Food");
         assert_eq!(game.map.get(3, 1).as_ref().unwrap().name(), "Food");
+    }
+
+    #[test]
+    fn when_starting_a_game_the_correct_game_state_is_returned() {
+        let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
+        let mut game = Game::new(map_file.to_str().unwrap(), 2);
+
+        let state = game.start();
+
+        assert_eq!(state.turn, 0);
+
+        // The example map has 2 players
+        assert_eq!(state.scores, vec![0, 0]);
+        assert_eq!(state.ants.len(), 2);
+
+        // The example map has 1 ant hill at (3, 2) for player 0
+        assert_eq!(state.ants[0].len(), 1);
+        assert_eq!(state.ants[0][0].row, 3);
+        assert_eq!(state.ants[0][0].col, 2);
+        assert_eq!(state.ants[0][0].player, 0);
+        assert!(state.ants[0][0].alive);
+        // Given the fov radius of 2, the ant at (3, 2) should see 7 entities
+        assert_eq!(state.ants[0][0].field_of_vision.len(), 7);
+        // Let's check that it was able to see the water next to it at (3, 3)
+        assert!(state.ants[0][0]
+            .field_of_vision
+            .iter()
+            .any(|entity| entity.name == "Water" && entity.row == 3 && entity.col == 3));
+
+        // The example map has 1 ant hill at (0, 1) for player 1
+        assert_eq!(state.ants[1].len(), 1);
+        assert_eq!(state.ants[1][0].row, 0);
+        assert_eq!(state.ants[1][0].col, 1);
+        assert_eq!(state.ants[1][0].player, 1);
+        assert!(state.ants[1][0].alive);
+        // Given the fov radius of 2, the ant at (0, 1) should see 7 entities
+        assert_eq!(state.ants[1][0].field_of_vision.len(), 7);
+        // Let's check that it was able to see the water next to it at (0, 0)
+        assert!(state.ants[1][0]
+            .field_of_vision
+            .iter()
+            .any(|entity| entity.name == "Water" && entity.row == 0 && entity.col == 0));
     }
 }
