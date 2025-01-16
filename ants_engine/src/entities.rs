@@ -1,3 +1,4 @@
+use crossterm::style::Color;
 use std::any::type_name;
 use uuid::Uuid;
 
@@ -107,5 +108,56 @@ pub fn from_char(value: char) -> Option<Box<dyn Entity>> {
         })),
         '%' => Some(Box::new(Water)),
         _ => panic!("Invalid character value: {}", value),
+    }
+}
+
+pub fn to_char(entity: &Option<Box<dyn Entity>>) -> char {
+    match entity.as_ref() {
+        Some(entity) => match entity.as_ref().name() {
+            "Ant" => match entity.alive() {
+                Some(true) => (entity.player().unwrap() + 'a' as usize) as u8 as char,
+                Some(false) => '.', // Dead ants are removed from the map
+                None => panic!("Ant {} missing alive value", entity.id()),
+            },
+            "Food" => '*',
+            // TODO: Handle razed hills
+            "Hill" => entity.player().unwrap() as u8 as char,
+            "Water" => '%',
+            _ => panic!("Invalid entity type"),
+        },
+        None => '.',
+    }
+}
+
+pub fn to_color(entity: &Option<Box<dyn Entity>>) -> Color {
+    match entity.as_ref() {
+        Some(entity) => match entity.as_ref().name() {
+            "Ant" => match entity.alive() {
+                Some(true) => player_to_color(entity.player().unwrap()),
+                Some(false) => Color::White, // Dead ants are removed from the map
+                None => panic!("Ant {} missing alive value", entity.id()),
+            },
+            "Food" => Color::Grey,
+            "Hill" => player_to_color(entity.player().unwrap()),
+            "Water" => Color::DarkBlue,
+            _ => panic!("Invalid entity type"),
+        },
+        None => Color::White,
+    }
+}
+
+fn player_to_color(player: usize) -> Color {
+    match player {
+        0 => Color::Red,
+        1 => Color::Green,
+        2 => Color::Blue,
+        3 => Color::Yellow,
+        4 => Color::Magenta,
+        5 => Color::Cyan,
+        6 => Color::DarkRed,
+        7 => Color::DarkGreen,
+        8 => Color::DarkMagenta,
+        9 => Color::DarkYellow,
+        _ => panic!("Invalid player number"),
     }
 }

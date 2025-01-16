@@ -103,6 +103,11 @@ impl Game {
         self.game_state()
     }
 
+    /// Draws the game to the console.
+    pub fn draw(&self) {
+        self.map.draw();
+    }
+
     fn game_state(&self) -> GameState {
         let players = self.map.players();
         let ants = self

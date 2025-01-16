@@ -1,6 +1,12 @@
-use crate::entities::from_char;
-use crate::entities::Entity;
+use crate::entities::{from_char, to_char, to_color, Entity};
+use crossterm::{
+    cursor::{Hide, MoveTo},
+    execute,
+    style::{Color, Print, SetForegroundColor},
+    terminal::{Clear, ClearType},
+};
 use regex::Regex;
+use std::io::{stdout, Write};
 
 pub struct Map {
     width: usize,
@@ -130,6 +136,33 @@ impl Map {
         }
 
         fov
+    }
+
+    pub fn draw(&self) {
+        let mut stdout = stdout();
+        execute!(stdout, Hide, MoveTo(0, 0), Clear(ClearType::All)).unwrap();
+
+        execute!(
+            stdout,
+            Print("Players: ".to_string() + self.players.to_string().as_str() + "\n\n")
+        )
+        .unwrap();
+
+        for row in 0..self.height {
+            for col in 0..self.width {
+                let entity = self.get(row, col);
+                execute!(
+                    stdout,
+                    SetForegroundColor(to_color(entity)),
+                    Print(to_char(entity)),
+                    SetForegroundColor(Color::Reset)
+                )
+                .unwrap();
+            }
+            execute!(stdout, Print("\n")).unwrap();
+        }
+
+        stdout.flush().unwrap();
     }
 
     fn new(width: usize, height: usize, players: usize) -> Map {
