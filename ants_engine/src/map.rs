@@ -1,4 +1,4 @@
-use crate::entities::{from_char, to_char, to_color, Entity};
+use crate::entities::{from_char, Entity};
 use crossterm::{
     cursor::{Hide, MoveTo},
     execute,
@@ -153,8 +153,12 @@ impl Map {
                 let entity = self.get(row, col);
                 execute!(
                     stdout,
-                    SetForegroundColor(to_color(entity)),
-                    Print(to_char(entity)),
+                    SetForegroundColor(
+                        entity
+                            .as_ref()
+                            .map_or(Color::Reset, |entity| entity.color())
+                    ),
+                    Print(entity.as_ref().map_or('.', |entity| entity.char())),
                     SetForegroundColor(Color::Reset)
                 )
                 .unwrap();

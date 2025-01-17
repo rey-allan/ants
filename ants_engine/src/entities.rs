@@ -24,6 +24,14 @@ pub trait Entity {
     fn on_ant_hill(&self) -> &Option<Box<dyn Entity>> {
         &None
     }
+
+    fn char(&self) -> char {
+        '!'
+    }
+
+    fn color(&self) -> Color {
+        Color::White
+    }
 }
 
 pub struct Ant {
@@ -64,10 +72,36 @@ impl Entity for Ant {
     fn on_ant_hill(&self) -> &Option<Box<dyn Entity>> {
         &self.on_ant_hill
     }
+
+    fn char(&self) -> char {
+        match self.alive {
+            true => match self.on_ant_hill {
+                Some(_) => (self.player + 'A' as usize) as u8 as char,
+                None => (self.player + 'a' as usize) as u8 as char,
+            },
+            false => '.', // Dead ants are removed from the map
+        }
+    }
+
+    fn color(&self) -> Color {
+        match self.alive {
+            true => player_to_color(self.player),
+            false => Color::White, // Dead ants are removed from the map
+        }
+    }
 }
 
 pub struct Food;
-impl Entity for Food {}
+
+impl Entity for Food {
+    fn char(&self) -> char {
+        '*'
+    }
+
+    fn color(&self) -> Color {
+        Color::Grey
+    }
+}
 
 pub struct Hill {
     player: usize,
@@ -83,10 +117,27 @@ impl Entity for Hill {
     fn player(&self) -> Option<usize> {
         Some(self.player)
     }
+
+    fn char(&self) -> char {
+        self.player as u8 as char
+    }
+
+    fn color(&self) -> Color {
+        player_to_color(self.player)
+    }
 }
 
 pub struct Water;
-impl Entity for Water {}
+
+impl Entity for Water {
+    fn char(&self) -> char {
+        '%'
+    }
+
+    fn color(&self) -> Color {
+        Color::DarkBlue
+    }
+}
 
 pub fn from_char(value: char) -> Option<Box<dyn Entity>> {
     match value {
@@ -108,41 +159,6 @@ pub fn from_char(value: char) -> Option<Box<dyn Entity>> {
         })),
         '%' => Some(Box::new(Water)),
         _ => panic!("Invalid character value: {}", value),
-    }
-}
-
-pub fn to_char(entity: &Option<Box<dyn Entity>>) -> char {
-    match entity.as_ref() {
-        Some(entity) => match entity.as_ref().name() {
-            "Ant" => match entity.alive() {
-                Some(true) => (entity.player().unwrap() + 'a' as usize) as u8 as char,
-                Some(false) => '.', // Dead ants are removed from the map
-                None => panic!("Ant {} missing alive value", entity.id()),
-            },
-            "Food" => '*',
-            // TODO: Handle razed hills
-            "Hill" => entity.player().unwrap() as u8 as char,
-            "Water" => '%',
-            _ => panic!("Invalid entity type"),
-        },
-        None => '.',
-    }
-}
-
-pub fn to_color(entity: &Option<Box<dyn Entity>>) -> Color {
-    match entity.as_ref() {
-        Some(entity) => match entity.as_ref().name() {
-            "Ant" => match entity.alive() {
-                Some(true) => player_to_color(entity.player().unwrap()),
-                Some(false) => Color::White, // Dead ants are removed from the map
-                None => panic!("Ant {} missing alive value", entity.id()),
-            },
-            "Food" => Color::Grey,
-            "Hill" => player_to_color(entity.player().unwrap()),
-            "Water" => Color::DarkBlue,
-            _ => panic!("Invalid entity type"),
-        },
-        None => Color::White,
     }
 }
 
