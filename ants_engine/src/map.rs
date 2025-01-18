@@ -253,6 +253,15 @@ impl Map {
     }
 
     fn is_valid_move(&self, from: (usize, usize), to: (usize, usize)) -> bool {
+        // If the coordinates are out of bounds, the move is invalid
+        if from.0 >= self.height
+            || from.1 >= self.width
+            || to.0 >= self.height
+            || to.1 >= self.width
+        {
+            return false;
+        }
+
         let from = self.get(from.0, from.1);
         if from.is_none() {
             return false;
@@ -634,6 +643,36 @@ mod tests {
 
         assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
         assert_eq!(map.get(1, 2).unwrap().name(), "Food");
+    }
+
+    #[test]
+    fn when_moving_an_ant_outside_of_the_right_side_movement_is_ignored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 2
+            m ...
+            m ..a
+            m ...";
+        let mut map = Map::parse(map);
+        map.move_entity((1, 2), (1, 3));
+
+        assert_eq!(map.get(1, 2).unwrap().name(), "Ant");
+    }
+
+    #[test]
+    fn when_moving_an_ant_outside_of_the_bottom_side_movement_is_ignored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 2
+            m ...
+            m ...
+            m ..a";
+        let mut map = Map::parse(map);
+        map.move_entity((2, 2), (3, 2));
+
+        assert_eq!(map.get(2, 2).unwrap().name(), "Ant");
     }
 
     #[test]
