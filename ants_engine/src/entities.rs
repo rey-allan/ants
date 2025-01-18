@@ -42,6 +42,15 @@ pub struct Ant {
 }
 
 impl Ant {
+    pub fn new(id: String, player: usize) -> Self {
+        Ant {
+            id,
+            player,
+            alive: true,
+            on_ant_hill: None,
+        }
+    }
+
     pub fn from_ant_hill(player: usize, ant_hill: Box<dyn Entity>) -> Self {
         Ant {
             id: Uuid::new_v4().to_string(),
@@ -151,6 +160,17 @@ pub fn from_char(value: char) -> Option<Box<dyn Entity>> {
             player: value as usize - 'a' as usize,
             alive: true,
             on_ant_hill: None,
+        })),
+        // Max 10 players
+        'A'..='J' => Some(Box::new(Ant {
+            // Generate a uuid for the ant
+            id: Uuid::new_v4().to_string(),
+            // Convert char to digit for player number where 'A' is 0 and so on
+            player: value as usize - 'A' as usize,
+            alive: true,
+            on_ant_hill: Some(Box::new(Hill {
+                player: value as usize - 'A' as usize,
+            })),
         })),
         '*' => Some(Box::new(Food)),
         // Max 10 players

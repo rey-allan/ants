@@ -1,4 +1,4 @@
-use crate::entities::{from_char, Entity};
+use crate::entities::{from_char, Ant, Entity, Hill};
 use crossterm::{
     cursor::{Hide, MoveTo},
     execute,
@@ -53,12 +53,24 @@ impl Map {
         map
     }
 
-    pub fn get(&self, row: usize, col: usize) -> &Option<Box<dyn Entity>> {
-        self.grid.get(row * self.width + col).unwrap()
+    pub fn get(&self, row: usize, col: usize) -> Option<&Box<dyn Entity>> {
+        self.grid
+            .get(row * self.width + col)
+            .and_then(|opt| opt.as_ref())
+    }
+
+    pub fn get_mut(&mut self, row: usize, col: usize) -> Option<&mut Box<dyn Entity>> {
+        self.grid
+            .get_mut(row * self.width + col)
+            .and_then(|opt| opt.as_mut())
     }
 
     pub fn set(&mut self, row: usize, col: usize, value: Box<dyn Entity>) {
         self.grid[row * self.width + col] = Some(value);
+    }
+
+    pub fn remove(&mut self, row: usize, col: usize) {
+        self.grid[row * self.width + col] = None;
     }
 
     pub fn players(&self) -> usize {
@@ -138,6 +150,49 @@ impl Map {
         fov
     }
 
+    pub fn move_entity(&mut self, from: (usize, usize), to: (usize, usize)) {
+        if !self.is_valid_move(from, to) {
+            return;
+        }
+
+        let collision = {
+            match self.get(to.0, to.1) {
+                Some(entity) => entity.name() == "Ant" && entity.alive().is_some_and(|alive| alive),
+                None => false,
+            }
+        };
+
+        // Extract hill information in case the ant was on a hill
+        let hill = self.get(from.0, from.1).and_then(|entity| {
+            entity
+                .on_ant_hill()
+                .as_ref()
+                .map(|hill| hill.player().unwrap())
+        });
+
+        // If there was a collision, both ants die
+        if collision {
+            self.get_mut(from.0, from.1).unwrap().set_alive(false);
+            self.get_mut(to.0, to.1).unwrap().set_alive(false);
+
+            return;
+        }
+
+        // Actually move the ant
+        let ant = {
+            let entity = self.get(from.0, from.1).unwrap();
+            Box::new(Ant::new(entity.id().to_string(), entity.player().unwrap()))
+        };
+        self.set(to.0, to.1, ant);
+
+        // If the ant was on a hill, replace the location with the hill, otherwise remove the ant
+        if let Some(hill) = hill {
+            self.set(from.0, from.1, Box::new(Hill::new(hill)));
+        } else {
+            self.remove(from.0, from.1);
+        }
+    }
+
     pub fn draw(&self) {
         let mut stdout = stdout();
         execute!(stdout, Hide, MoveTo(0, 0), Clear(ClearType::All)).unwrap();
@@ -153,12 +208,8 @@ impl Map {
                 let entity = self.get(row, col);
                 execute!(
                     stdout,
-                    SetForegroundColor(
-                        entity
-                            .as_ref()
-                            .map_or(Color::Reset, |entity| entity.color())
-                    ),
-                    Print(entity.as_ref().map_or('.', |entity| entity.char())),
+                    SetForegroundColor(entity.map_or(Color::Reset, |entity| entity.color())),
+                    Print(entity.map_or('.', |entity| entity.char())),
                     SetForegroundColor(Color::Reset)
                 )
                 .unwrap();
@@ -200,6 +251,28 @@ impl Map {
             })
             .collect()
     }
+
+    fn is_valid_move(&self, from: (usize, usize), to: (usize, usize)) -> bool {
+        let from = self.get(from.0, from.1);
+        if from.is_none() {
+            return false;
+        }
+
+        // Only alive ants can move
+        let from = from.unwrap();
+        if from.name() != "Ant" || from.alive().is_none() || !from.alive().unwrap() {
+            return false;
+        }
+
+        if let Some(to) = self.get(to.0, to.1) {
+            // Water or food blocks ants
+            if to.name() == "Water" || to.name() == "Food" {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 #[cfg(test)]
@@ -233,13 +306,27 @@ mod tests {
         let map = Map::parse(map);
 
         assert!(map.get(0, 0).is_none());
-        assert_eq!(map.get(0, 1).as_ref().unwrap().name(), "Ant");
-        assert_eq!(map.get(0, 1).as_ref().unwrap().player().unwrap(), 1);
-        assert!(map.get(0, 1).as_ref().unwrap().alive().unwrap());
-        assert_eq!(map.get(1, 0).as_ref().unwrap().name(), "Food");
-        assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Hill");
-        assert_eq!(map.get(1, 1).as_ref().unwrap().player().unwrap(), 0);
-        assert_eq!(map.get(1, 2).as_ref().unwrap().name(), "Water");
+        assert_eq!(map.get(0, 1).unwrap().name(), "Ant");
+        assert_eq!(map.get(0, 1).unwrap().player().unwrap(), 1);
+        assert!(map.get(0, 1).unwrap().alive().unwrap());
+        assert_eq!(map.get(1, 0).unwrap().name(), "Food");
+        assert_eq!(map.get(1, 1).unwrap().name(), "Hill");
+        assert_eq!(map.get(1, 1).unwrap().player().unwrap(), 0);
+        assert_eq!(map.get(1, 2).unwrap().name(), "Water");
+    }
+
+    #[test]
+    fn when_getting_a_cell_by_row_and_col_and_mutating_it_the_entity_is_correctly_updated() {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m ..
+            m .a";
+        let mut map = Map::parse(map);
+        map.get_mut(1, 1).unwrap().set_alive(false);
+
+        assert!(!map.get(1, 1).unwrap().alive().unwrap());
     }
 
     #[test]
@@ -253,7 +340,21 @@ mod tests {
         let mut map = Map::parse(map);
         map.set(1, 1, Box::new(Water));
 
-        assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Water");
+        assert_eq!(map.get(1, 1).unwrap().name(), "Water");
+    }
+
+    #[test]
+    fn when_removing_an_entity_the_cell_becomes_empty() {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m ..
+            m .0";
+        let mut map = Map::parse(map);
+        map.remove(1, 1);
+
+        assert!(map.get(1, 1).is_none());
     }
 
     #[test]
@@ -411,15 +512,143 @@ mod tests {
         let fov = map.field_of_vision((2, 2), 2);
 
         assert_eq!(fov.len(), 8);
-        assert_eq!(map.get(0, 2).as_ref().unwrap().name(), "Food");
-        assert_eq!(map.get(1, 1).as_ref().unwrap().name(), "Hill");
-        assert_eq!(map.get(1, 1).as_ref().unwrap().player().unwrap(), 0);
-        assert_eq!(map.get(1, 2).as_ref().unwrap().name(), "Food");
-        assert_eq!(map.get(1, 3).as_ref().unwrap().name(), "Water");
-        assert_eq!(map.get(2, 1).as_ref().unwrap().name(), "Food");
-        assert_eq!(map.get(2, 4).as_ref().unwrap().name(), "Water");
-        assert_eq!(map.get(3, 1).as_ref().unwrap().name(), "Hill");
-        assert_eq!(map.get(3, 1).as_ref().unwrap().player().unwrap(), 1);
-        assert_eq!(map.get(4, 2).as_ref().unwrap().name(), "Food");
+        assert_eq!(map.get(0, 2).unwrap().name(), "Food");
+        assert_eq!(map.get(1, 1).unwrap().name(), "Hill");
+        assert_eq!(map.get(1, 1).unwrap().player().unwrap(), 0);
+        assert_eq!(map.get(1, 2).unwrap().name(), "Food");
+        assert_eq!(map.get(1, 3).unwrap().name(), "Water");
+        assert_eq!(map.get(2, 1).unwrap().name(), "Food");
+        assert_eq!(map.get(2, 4).unwrap().name(), "Water");
+        assert_eq!(map.get(3, 1).unwrap().name(), "Hill");
+        assert_eq!(map.get(3, 1).unwrap().player().unwrap(), 1);
+        assert_eq!(map.get(4, 2).unwrap().name(), "Food");
+    }
+
+    #[test]
+    fn when_moving_an_ant_to_an_empty_cell_the_ant_is_moved() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a.
+            m ...";
+        let mut map = Map::parse(map);
+        map.move_entity((1, 1), (0, 1));
+
+        assert!(map.get(1, 1).is_none());
+        assert_eq!(map.get(0, 1).unwrap().name(), "Ant");
+    }
+
+    #[test]
+    fn when_moving_an_ant_from_a_hill_to_an_empty_cell_the_ant_is_moved_and_the_hill_is_restored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .A.
+            m ...";
+        let mut map = Map::parse(map);
+        map.move_entity((1, 1), (0, 1));
+
+        assert_eq!(map.get(0, 1).unwrap().name(), "Ant");
+        assert_eq!(map.get(1, 1).unwrap().name(), "Hill");
+    }
+
+    #[test]
+    fn when_moving_an_empty_entity_movement_is_ignored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a.
+            m ...";
+        let mut map = Map::parse(map);
+        map.move_entity((0, 1), (0, 2));
+
+        assert!(map.get(0, 1).is_none());
+    }
+
+    #[test]
+    fn when_moving_an_entity_that_is_not_an_ant_movement_is_ignored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m %..
+            m .a.
+            m ...";
+        let mut map = Map::parse(map);
+        map.move_entity((0, 0), (1, 0));
+
+        assert_eq!(map.get(0, 0).unwrap().name(), "Water");
+        assert!(map.get(1, 0).is_none());
+    }
+
+    #[test]
+    fn when_moving_a_dead_ant_movement_is_ignored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a.
+            m ...";
+        let mut map = Map::parse(map);
+        map.get_mut(1, 1).unwrap().set_alive(false);
+        map.move_entity((1, 1), (0, 1));
+
+        assert!(map.get(0, 1).is_none());
+        assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
+    }
+
+    #[test]
+    fn when_moving_an_ant_to_water_movement_is_ignored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a.
+            m .%.";
+        let mut map = Map::parse(map);
+        map.move_entity((1, 1), (2, 1));
+
+        assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
+        assert_eq!(map.get(2, 1).unwrap().name(), "Water");
+    }
+
+    #[test]
+    fn when_moving_an_ant_to_food_movement_is_ignored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a*
+            m ...";
+        let mut map = Map::parse(map);
+        map.move_entity((1, 1), (1, 2));
+
+        assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
+        assert_eq!(map.get(1, 2).unwrap().name(), "Food");
+    }
+
+    #[test]
+    fn when_moving_an_ant_to_a_cell_with_another_ant_both_ants_die() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a.
+            m .b.";
+        let mut map = Map::parse(map);
+        map.move_entity((1, 1), (2, 1));
+
+        assert!(!map.get(1, 1).unwrap().alive().unwrap());
+        assert!(!map.get(2, 1).unwrap().alive().unwrap());
     }
 }
