@@ -141,12 +141,13 @@ impl Game {
     pub fn update(&mut self, actions: Vec<Action>) -> GameState {
         move_ants(&mut self.map, actions);
 
+        self.turn += 1;
         self.game_state()
     }
 
     /// Draws the game to the console.
     pub fn draw(&self) {
-        self.map.draw();
+        self.map.draw(self.turn);
     }
 
     fn game_state(&self) -> GameState {
