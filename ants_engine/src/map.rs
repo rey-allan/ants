@@ -1,6 +1,6 @@
 use crate::entities::{from_char, Ant, Entity, Hill};
 use crossterm::{
-    cursor::{Hide, MoveTo},
+    cursor::Hide,
     execute,
     style::{Color, Print, SetForegroundColor},
     terminal::{Clear, ClearType},
@@ -193,13 +193,18 @@ impl Map {
         }
     }
 
-    pub fn draw(&self) {
+    pub fn draw(&self, turn: usize) {
         let mut stdout = stdout();
-        execute!(stdout, Hide, MoveTo(0, 0), Clear(ClearType::All)).unwrap();
 
         execute!(
             stdout,
-            Print("Players: ".to_string() + self.players.to_string().as_str() + "\n\n")
+            Clear(ClearType::All),
+            Hide,
+            Print("Players: "),
+            Print(self.players.to_string()),
+            Print("\nTurn: "),
+            Print(turn.to_string()),
+            Print("\n\n")
         )
         .unwrap();
 
