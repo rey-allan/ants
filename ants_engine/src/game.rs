@@ -26,6 +26,40 @@ pub struct GameState {
     ants: Vec<Vec<PlayerAnt>>,
 }
 
+/// Represents the direction an ant can move.
+pub enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
+
+/// Represents an action an ant can take.
+/// The action is a tuple of the ant's row, column, and direction.
+/// If the direction is not a valid move, the ant will stay in place.
+/// Or if the provided location is not a valid ant, the action will be ignored.
+pub struct Action {
+    row: usize,
+    col: usize,
+    direction: Direction,
+}
+
+impl Action {
+    /// Creates a new action.
+    ///
+    /// # Arguments
+    /// * `row` - The row of the ant to move.
+    /// * `col` - The column of the ant to move.
+    /// * `direction` - The direction the ant should move.
+    pub fn new(row: usize, col: usize, direction: Direction) -> Action {
+        Action {
+            row,
+            col,
+            direction,
+        }
+    }
+}
+
 #[derive(Clone)]
 struct StateEntity {
     name: String,
@@ -103,6 +137,13 @@ impl Game {
         self.game_state()
     }
 
+    /// Updates the game state based on the actions provided for each ant.
+    pub fn update(&mut self, actions: Vec<Action>) -> GameState {
+        move_ants(&mut self.map, actions);
+
+        self.game_state()
+    }
+
     /// Draws the game to the console.
     pub fn draw(&self) {
         self.map.draw();
@@ -158,6 +199,19 @@ fn spawn_food(map: &mut Map, locations: Vec<(usize, usize)>) {
     }
 }
 
+fn move_ants(map: &mut Map, actions: Vec<Action>) {
+    for action in actions {
+        let (to_row, to_col) = match action.direction {
+            Direction::North => (action.row.saturating_sub(1), action.col),
+            Direction::East => (action.row, action.col + 1),
+            Direction::South => (action.row + 1, action.col),
+            Direction::West => (action.row, action.col.saturating_sub(1)),
+        };
+
+        map.move_entity((action.row, action.col), (to_row, to_col));
+    }
+}
+
 fn to_state_entity(entity: &dyn Entity, row: usize, col: usize) -> StateEntity {
     StateEntity {
         name: entity.name().to_string(),
@@ -183,7 +237,7 @@ mod tests {
         game.start();
 
         // The example map has water at (0, 0)
-        assert_eq!(game.map.get(0, 0).as_ref().unwrap().name(), "Water");
+        assert_eq!(game.map.get(0, 0).unwrap().name(), "Water");
     }
 
     #[test]
@@ -194,14 +248,14 @@ mod tests {
         game.start();
 
         // The example map has 1 ant hill at (0, 1) for player 1
-        let ant = game.map.get(0, 1).as_ref().unwrap();
+        let ant = game.map.get(0, 1).unwrap();
         assert_eq!(ant.name(), "Ant");
         assert_eq!(ant.player().unwrap(), 1);
         assert!(ant.alive().unwrap());
         assert_eq!(ant.on_ant_hill().as_ref().unwrap().player().unwrap(), 1);
 
         // The example map has 1 ant hill at (3, 2) for player 0
-        let ant = game.map.get(3, 2).as_ref().unwrap();
+        let ant = game.map.get(3, 2).unwrap();
         assert_eq!(ant.name(), "Ant");
         assert_eq!(ant.player().unwrap(), 0);
         assert!(ant.alive().unwrap());

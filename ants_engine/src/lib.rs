@@ -4,6 +4,8 @@
 //! Inspired by [Google's Ants AI Challenge](http://ants.aichallenge.org/).
 
 pub mod game;
+pub use game::Action;
+pub use game::Direction;
 pub use game::Game;
 pub use game::GameState;
 
