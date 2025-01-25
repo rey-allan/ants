@@ -4,6 +4,7 @@ use crate::entities::Food;
 use crate::entities::Hill;
 use crate::map::Map;
 use rand::seq::SliceRandom;
+use std::collections::HashMap;
 use std::fs;
 
 /// The Ants game.
@@ -11,7 +12,8 @@ use std::fs;
 pub struct Game {
     map: Map,
     map_contents: String,
-    fov_radius: usize,
+    fov_radius2: usize,
+    attack_radius2: usize,
     turn: usize,
     scores: Vec<usize>,
 }
@@ -84,8 +86,9 @@ impl Game {
     ///
     /// # Arguments
     /// * `map_file` - The path to the file containing the map.
-    /// * `fov_radius` - The radius of the field of vision for each ant.
-    pub fn new(map_file: &str, fov_radius: usize) -> Game {
+    /// * `fov_radius2` - The radius **squared** of the field of vision for each ant.
+    /// * `attack_radius2` - The radius **squared** of the attack range for each ant.
+    pub fn new(map_file: &str, fov_radius2: usize, attack_radius2: usize) -> Game {
         match fs::read_to_string(map_file) {
             Ok(contents) => {
                 let map = Map::parse(&contents);
@@ -94,7 +97,8 @@ impl Game {
                 Game {
                     map,
                     map_contents: contents,
-                    fov_radius,
+                    fov_radius2,
+                    attack_radius2,
                     turn: 0,
                     scores: vec![0; players],
                 }
@@ -140,6 +144,7 @@ impl Game {
     /// Updates the game state based on the actions provided for each ant.
     pub fn update(&mut self, actions: Vec<Action>) -> GameState {
         move_ants(&mut self.map, actions);
+        attack(&mut self.map, self.attack_radius2);
 
         self.turn += 1;
         self.game_state()
@@ -152,11 +157,8 @@ impl Game {
 
     fn game_state(&self) -> GameState {
         let players = self.map.players();
-        let ants = self
-            .map
-            .ants()
+        let ants = live_ants(&self.map)
             .into_iter()
-            .filter(|(ant, _, _)| ant.alive().unwrap())
             .map(|(ant, row, col)| PlayerAnt {
                 id: ant.id().to_string(),
                 row,
@@ -165,7 +167,7 @@ impl Game {
                 alive: ant.alive().unwrap(),
                 field_of_vision: self
                     .map
-                    .field_of_vision((row, col), self.fov_radius)
+                    .field_of_vision((row, col), self.fov_radius2)
                     .into_iter()
                     .map(|(entity, row, col)| to_state_entity(entity, row, col))
                     .collect(),
@@ -213,6 +215,68 @@ fn move_ants(map: &mut Map, actions: Vec<Action>) {
     }
 }
 
+fn attack(map: &mut Map, attack_radius: usize) {
+    // Pre-calculate the number of enemies for each live ant as a map of ant `id` to the Vec of enemies
+    let ants = live_ants(map);
+    let enemies: HashMap<String, Vec<(&dyn Entity, usize, usize)>> = ants
+        .iter()
+        .map(|(ant, row, col)| {
+            let fov = map.field_of_vision((*row, *col), attack_radius);
+            let enemies = enemies(fov, ant.player().unwrap());
+            (ant.id().to_string(), enemies)
+        })
+        .collect();
+
+    // Determine which ants to kill
+    let mut to_kill = Vec::new();
+    for (ant, row, col) in ants {
+        let ant_enemies = enemies.get(ant.id()).unwrap();
+        let focus = ant_enemies.len();
+
+        if focus == 0 {
+            continue;
+        }
+
+        // Find the enemy with the most attention power, i.e. the enemy with the least other ants focused on it
+        let min_enemy_focus = ant_enemies
+            .iter()
+            .map(|(enemy, _, _)| enemies.get(enemy.id()).unwrap().len())
+            .min()
+            .unwrap();
+
+        // Ant dies if its focused on more or equal enemies than its enemy with the most attention power
+        if focus >= min_enemy_focus {
+            to_kill.push((row, col));
+        }
+    }
+
+    // After all battles are resolved, kill the ants
+    for (row, col) in to_kill {
+        map.get_mut(row, col).unwrap().set_alive(false);
+    }
+}
+
+fn live_ants(map: &Map) -> Vec<(&dyn Entity, usize, usize)> {
+    map.ants()
+        .into_iter()
+        .filter(|(ant, _, _)| ant.alive().unwrap())
+        .collect()
+}
+
+fn enemies(
+    field_of_vision: Vec<(&dyn Entity, usize, usize)>,
+    player: usize,
+) -> Vec<(&dyn Entity, usize, usize)> {
+    field_of_vision
+        .into_iter()
+        .filter(|(entity, _, _)| {
+            entity.name() == "Ant"
+                && entity.player().is_some()
+                && entity.player().unwrap() != player
+        })
+        .collect()
+}
+
 fn to_state_entity(entity: &dyn Entity, row: usize, col: usize) -> StateEntity {
     StateEntity {
         name: entity.name().to_string(),
@@ -232,7 +296,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_the_map_is_reset() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 2);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4);
 
         game.map.set(0, 0, Box::new(Food));
         game.start();
@@ -244,7 +308,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_ants_are_spawned_on_ant_hills() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 2);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4);
 
         game.start();
 
@@ -266,7 +330,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_food_is_spawned_around_land_locations_for_each_ant_hill() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 2);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4);
 
         game.start();
 
@@ -286,7 +350,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_the_correct_game_state_is_returned() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 2);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4);
 
         let state = game.start();
 
@@ -323,5 +387,161 @@ mod tests {
             .field_of_vision
             .iter()
             .any(|entity| entity.name == "Water" && entity.row == 0 && entity.col == 0));
+    }
+
+    #[test]
+    fn when_attacking_on_a_one_on_one_battle_both_ants_die() {
+        let map = "\
+            rows 3
+            cols 5
+            players 2
+            m .....
+            m .a.b.
+            m .....";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(1, 1).unwrap().alive().unwrap());
+        assert!(map.get(1, 3).unwrap().alive().unwrap());
+
+        attack(&mut map, 5);
+
+        assert!(!map.get(1, 1).unwrap().alive().unwrap());
+        assert!(!map.get(1, 3).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_attacking_on_a_two_on_one_battle_ant_a_dies() {
+        let map = "\
+            rows 3
+            cols 5
+            players 2
+            m ...b.
+            m .a...
+            m ...b.";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(0, 3).unwrap().alive().unwrap());
+        assert!(map.get(1, 1).unwrap().alive().unwrap());
+        assert!(map.get(2, 3).unwrap().alive().unwrap());
+
+        attack(&mut map, 5);
+
+        assert!(map.get(0, 3).unwrap().alive().unwrap());
+        assert!(!map.get(1, 1).unwrap().alive().unwrap());
+        assert!(map.get(2, 3).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_attacking_on_a_one_on_one_on_one_battle_all_ants_die() {
+        let map = "\
+            rows 3
+            cols 5
+            players 3
+            m ...b.
+            m .a...
+            m ...c.";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(0, 3).unwrap().alive().unwrap());
+        assert!(map.get(1, 1).unwrap().alive().unwrap());
+        assert!(map.get(2, 3).unwrap().alive().unwrap());
+
+        attack(&mut map, 5);
+
+        assert!(!map.get(0, 3).unwrap().alive().unwrap());
+        assert!(!map.get(1, 1).unwrap().alive().unwrap());
+        assert!(!map.get(2, 3).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_attacking_on_an_ant_sandwich_battle_the_middle_ant_dies() {
+        let map = "\
+            rows 3
+            cols 5
+            players 2
+            m .....
+            m a.b.c
+            m .....";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(1, 0).unwrap().alive().unwrap());
+        assert!(map.get(1, 2).unwrap().alive().unwrap());
+        assert!(map.get(1, 4).unwrap().alive().unwrap());
+
+        attack(&mut map, 5);
+
+        assert!(map.get(1, 0).unwrap().alive().unwrap());
+        assert!(!map.get(1, 2).unwrap().alive().unwrap());
+        assert!(map.get(1, 4).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_attacking_on_a_one_on_two_on_one_battle_ants_b_and_c_die() {
+        let map = "\
+            rows 3
+            cols 5
+            players 3
+            m ...b.
+            m .a.a.
+            m ...c.";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(0, 3).unwrap().alive().unwrap());
+        assert!(map.get(1, 1).unwrap().alive().unwrap());
+        assert!(map.get(1, 3).unwrap().alive().unwrap());
+        assert!(map.get(2, 3).unwrap().alive().unwrap());
+
+        attack(&mut map, 5);
+
+        assert!(!map.get(0, 3).unwrap().alive().unwrap());
+        assert!(map.get(1, 1).unwrap().alive().unwrap());
+        assert!(map.get(1, 3).unwrap().alive().unwrap());
+        assert!(!map.get(2, 3).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_attacking_on_a_wall_punch_battle_many_ants_die() {
+        let map = "\
+            rows 3
+            cols 9
+            players 2
+            m aaaaaaaaa
+            m ...bbb...
+            m ...bbb...";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(0, 0).unwrap().alive().unwrap());
+        assert!(map.get(0, 1).unwrap().alive().unwrap());
+        assert!(map.get(0, 2).unwrap().alive().unwrap());
+        assert!(map.get(0, 3).unwrap().alive().unwrap());
+        assert!(map.get(0, 4).unwrap().alive().unwrap());
+        assert!(map.get(0, 5).unwrap().alive().unwrap());
+        assert!(map.get(0, 6).unwrap().alive().unwrap());
+        assert!(map.get(0, 7).unwrap().alive().unwrap());
+        assert!(map.get(0, 8).unwrap().alive().unwrap());
+        assert!(map.get(1, 3).unwrap().alive().unwrap());
+        assert!(map.get(1, 4).unwrap().alive().unwrap());
+        assert!(map.get(1, 5).unwrap().alive().unwrap());
+        assert!(map.get(2, 3).unwrap().alive().unwrap());
+        assert!(map.get(2, 4).unwrap().alive().unwrap());
+        assert!(map.get(2, 5).unwrap().alive().unwrap());
+
+        attack(&mut map, 5);
+
+        assert!(map.get(0, 0).unwrap().alive().unwrap());
+        assert!(map.get(0, 1).unwrap().alive().unwrap());
+        assert!(!map.get(0, 2).unwrap().alive().unwrap());
+        assert!(!map.get(0, 3).unwrap().alive().unwrap());
+        assert!(!map.get(0, 4).unwrap().alive().unwrap());
+        assert!(!map.get(0, 5).unwrap().alive().unwrap());
+        assert!(!map.get(0, 6).unwrap().alive().unwrap());
+        assert!(map.get(0, 7).unwrap().alive().unwrap());
+        assert!(map.get(0, 8).unwrap().alive().unwrap());
+        assert!(!map.get(1, 3).unwrap().alive().unwrap());
+        assert!(!map.get(1, 4).unwrap().alive().unwrap());
+        assert!(!map.get(1, 5).unwrap().alive().unwrap());
+        assert!(!map.get(2, 3).unwrap().alive().unwrap());
+        assert!(map.get(2, 4).unwrap().alive().unwrap());
+        assert!(!map.get(2, 5).unwrap().alive().unwrap());
     }
 }

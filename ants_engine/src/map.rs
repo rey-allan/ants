@@ -121,9 +121,10 @@ impl Map {
     pub fn field_of_vision(
         &self,
         center: (usize, usize),
-        radius: usize,
+        radius2: usize,
     ) -> Vec<(&dyn Entity, usize, usize)> {
         let (row, col) = center;
+        let radius = (radius2 as f64).sqrt() as usize;
         let mut fov = Vec::new();
 
         // Compute the field of vision around the center coordinate
@@ -132,8 +133,7 @@ impl Map {
         // using the euclidean distance formula: (x1 - x2)^2 + (y1 - y2)^2 <= radius^2
         for i in row.saturating_sub(radius)..=(row + radius).min(self.height - 1) {
             for j in col.saturating_sub(radius)..=(col + radius).min(self.width - 1) {
-                if (i as i32 - row as i32).pow(2) + (j as i32 - col as i32).pow(2)
-                    <= radius.pow(2) as i32
+                if (i as i32 - row as i32).pow(2) + (j as i32 - col as i32).pow(2) <= radius2 as i32
                 {
                     // Skip the given center coordinate
                     if i == row && j == col {
@@ -523,7 +523,7 @@ mod tests {
             m ..*..";
         let map = Map::parse(map);
 
-        let fov = map.field_of_vision((2, 2), 2);
+        let fov = map.field_of_vision((2, 2), 4);
 
         assert_eq!(fov.len(), 8);
         assert_eq!(map.get(0, 2).unwrap().name(), "Food");
