@@ -145,6 +145,7 @@ impl Game {
     pub fn update(&mut self, actions: Vec<Action>) -> GameState {
         move_ants(&mut self.map, actions);
         attack(&mut self.map, self.attack_radius2);
+        raze_hills(&mut self.map);
 
         self.turn += 1;
         self.game_state()
@@ -191,7 +192,10 @@ fn spawn_ants(map: &mut Map, ant_hills: Vec<(usize, usize, usize)>) {
         map.set(
             row,
             col,
-            Box::new(Ant::from_ant_hill(player, Box::new(Hill::new(player)))),
+            Box::new(Ant::from_ant_hill(
+                player,
+                Box::new(Hill::new(player, true)),
+            )),
         );
     }
 }
@@ -253,6 +257,30 @@ fn attack(map: &mut Map, attack_radius: usize) {
     // After all battles are resolved, kill the ants
     for (row, col) in to_kill {
         map.get_mut(row, col).unwrap().set_alive(false);
+    }
+}
+
+fn raze_hills(map: &mut Map) {
+    let ants = live_ants(map);
+    let hills_to_raze: Vec<(usize, usize, usize)> = ants
+        .into_iter()
+        .filter_map(|(ant, row, col)| {
+            // If the ant is on an ant hill that is not its own, the hill should be razed
+            if ant.on_ant_hill().is_some()
+                && ant.player().unwrap() != ant.on_ant_hill().as_ref().unwrap().player().unwrap()
+            {
+                let hill_owner = ant.on_ant_hill().as_ref().unwrap().player().unwrap();
+                Some((hill_owner, row, col))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    for (player, row, col) in hills_to_raze {
+        map.get_mut(row, col)
+            .unwrap()
+            .set_on_ant_hill(Box::new(Hill::new(player, false)));
     }
 }
 
@@ -543,5 +571,96 @@ mod tests {
         assert!(!map.get(2, 3).unwrap().alive().unwrap());
         assert!(map.get(2, 4).unwrap().alive().unwrap());
         assert!(!map.get(2, 5).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_razing_hills_if_a_hill_does_not_have_an_ant_the_hill_is_not_razed() {
+        let map = "\
+            rows 2
+            cols 2
+            players 2
+            m 0.
+            m ..";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(0, 0).unwrap().alive().unwrap());
+        raze_hills(&mut map);
+        assert!(map.get(0, 0).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_razing_hills_if_a_hill_has_an_ant_of_the_same_player_the_hill_is_not_razed() {
+        let map = "\
+            rows 2
+            cols 2
+            players 2
+            m A.
+            m ..";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(0, 0).unwrap().alive().unwrap());
+        raze_hills(&mut map);
+        assert!(map.get(0, 0).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_razing_hills_if_a_hill_has_a_dead_enemy_ant_the_hill_is_not_razed() {
+        let map = "\
+            rows 2
+            cols 2
+            players 2
+            m 0.
+            m b.";
+        let mut map = Map::parse(map);
+
+        assert_eq!(map.get(0, 0).unwrap().name(), "Hill");
+        assert!(map.get(0, 0).unwrap().alive().unwrap());
+
+        // Move the enemy to the hill
+        map.move_entity((1, 0), (0, 0));
+        assert_eq!(map.get(0, 0).unwrap().name(), "Ant");
+
+        // Kill the enemy
+        map.get_mut(0, 0).unwrap().set_alive(false);
+
+        raze_hills(&mut map);
+
+        assert!(map
+            .get(0, 0)
+            .unwrap()
+            .on_ant_hill()
+            .as_ref()
+            .unwrap()
+            .alive()
+            .unwrap());
+    }
+
+    #[test]
+    fn when_razing_hills_if_a_hill_has_an_alive_enemy_ant_the_hill_is_razed() {
+        let map = "\
+            rows 2
+            cols 2
+            players 2
+            m 0.
+            m b.";
+        let mut map = Map::parse(map);
+
+        assert_eq!(map.get(0, 0).unwrap().name(), "Hill");
+        assert!(map.get(0, 0).unwrap().alive().unwrap());
+
+        // Move the enemy to the hill
+        map.move_entity((1, 0), (0, 0));
+        assert_eq!(map.get(0, 0).unwrap().name(), "Ant");
+
+        raze_hills(&mut map);
+
+        assert!(!map
+            .get(0, 0)
+            .unwrap()
+            .on_ant_hill()
+            .as_ref()
+            .unwrap()
+            .alive()
+            .unwrap());
     }
 }
