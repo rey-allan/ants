@@ -162,14 +162,6 @@ impl Map {
             }
         };
 
-        // Extract hill information in case the ant was on a hill
-        let hill = self.get(from.0, from.1).and_then(|entity| {
-            entity
-                .on_ant_hill()
-                .as_ref()
-                .map(|hill| hill.player().unwrap())
-        });
-
         // If there was a collision, both ants die
         if collision {
             self.get_mut(from.0, from.1).unwrap().set_alive(false);
@@ -181,13 +173,41 @@ impl Map {
         // Actually move the ant
         let ant = {
             let entity = self.get(from.0, from.1).unwrap();
-            Box::new(Ant::new(entity.id().to_string(), entity.player().unwrap()))
+            // Check if the ant is moving to a hill
+            let to_hill: Option<Box<dyn Entity>> = {
+                if let Some(to) = self.get(to.0, to.1) {
+                    if to.name() == "Hill" {
+                        Some(Box::new(Hill::new(
+                            to.player().unwrap(),
+                            to.alive().unwrap(),
+                        )))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+
+            Box::new(Ant::new(
+                entity.id().to_string(),
+                entity.player().unwrap(),
+                entity.alive().unwrap(),
+                to_hill,
+            ))
         };
         self.set(to.0, to.1, ant);
 
         // If the ant was on a hill, replace the location with the hill, otherwise remove the ant
+        let hill = self.get(from.0, from.1).and_then(|entity| {
+            entity
+                .on_ant_hill()
+                .as_ref()
+                .map(|hill| (hill.player().unwrap(), hill.alive().unwrap()))
+        });
+
         if let Some(hill) = hill {
-            self.set(from.0, from.1, Box::new(Hill::new(hill)));
+            self.set(from.0, from.1, Box::new(Hill::new(hill.0, hill.1)));
         } else {
             self.remove(from.0, from.1);
         }
@@ -568,6 +588,39 @@ mod tests {
 
         assert_eq!(map.get(0, 1).unwrap().name(), "Ant");
         assert_eq!(map.get(1, 1).unwrap().name(), "Hill");
+    }
+
+    #[test]
+    fn when_moving_an_ant_to_a_hill_the_ant_is_moved_on_the_hill() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a.
+            m .0.";
+        let mut map = Map::parse(map);
+        map.move_entity((1, 1), (2, 1));
+
+        assert!(map.get(1, 1).is_none());
+        assert_eq!(map.get(2, 1).unwrap().name(), "Ant");
+        assert!(map.get(2, 1).unwrap().on_ant_hill().is_some());
+        assert_eq!(
+            map.get(2, 1)
+                .unwrap()
+                .on_ant_hill()
+                .unwrap()
+                .player()
+                .unwrap(),
+            0
+        );
+        assert!(map
+            .get(2, 1)
+            .unwrap()
+            .on_ant_hill()
+            .unwrap()
+            .alive()
+            .unwrap());
     }
 
     #[test]

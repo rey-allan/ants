@@ -21,9 +21,11 @@ pub trait Entity {
 
     fn set_alive(&mut self, _value: bool) {}
 
-    fn on_ant_hill(&self) -> &Option<Box<dyn Entity>> {
-        &None
+    fn on_ant_hill(&self) -> Option<&Box<dyn Entity>> {
+        None
     }
+
+    fn set_on_ant_hill(&mut self, _value: Box<dyn Entity>) {}
 
     fn char(&self) -> char {
         '!'
@@ -42,12 +44,17 @@ pub struct Ant {
 }
 
 impl Ant {
-    pub fn new(id: String, player: usize) -> Self {
+    pub fn new(
+        id: String,
+        player: usize,
+        alive: bool,
+        on_ant_hill: Option<Box<dyn Entity>>,
+    ) -> Self {
         Ant {
             id,
             player,
-            alive: true,
-            on_ant_hill: None,
+            alive,
+            on_ant_hill,
         }
     }
 
@@ -78,8 +85,12 @@ impl Entity for Ant {
         self.alive = value;
     }
 
-    fn on_ant_hill(&self) -> &Option<Box<dyn Entity>> {
-        &self.on_ant_hill
+    fn on_ant_hill(&self) -> Option<&Box<dyn Entity>> {
+        self.on_ant_hill.as_ref()
+    }
+
+    fn set_on_ant_hill(&mut self, value: Box<dyn Entity>) {
+        self.on_ant_hill = Some(value);
     }
 
     fn char(&self) -> char {
@@ -114,11 +125,13 @@ impl Entity for Food {
 
 pub struct Hill {
     player: usize,
+    // For a hill, `alive` means it hasn't been razed by an enemy ant
+    alive: bool,
 }
 
 impl Hill {
-    pub fn new(player: usize) -> Self {
-        Hill { player }
+    pub fn new(player: usize, alive: bool) -> Self {
+        Hill { player, alive }
     }
 }
 
@@ -127,8 +140,15 @@ impl Entity for Hill {
         Some(self.player)
     }
 
+    fn alive(&self) -> Option<bool> {
+        Some(self.alive)
+    }
+
     fn char(&self) -> char {
-        self.player as u8 as char
+        match self.alive {
+            true => (self.player + '0' as usize) as u8 as char,
+            false => 'X',
+        }
     }
 
     fn color(&self) -> Color {
@@ -170,12 +190,14 @@ pub fn from_char(value: char) -> Option<Box<dyn Entity>> {
             alive: true,
             on_ant_hill: Some(Box::new(Hill {
                 player: value as usize - 'A' as usize,
+                alive: true,
             })),
         })),
         '*' => Some(Box::new(Food)),
         // Max 10 players
         '0'..='9' => Some(Box::new(Hill {
             player: value.to_digit(10).unwrap() as usize,
+            alive: true,
         })),
         '%' => Some(Box::new(Water)),
         _ => panic!("Invalid character value: {}", value),
