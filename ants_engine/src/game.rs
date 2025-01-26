@@ -3,7 +3,9 @@ use crate::entities::Entity;
 use crate::entities::Food;
 use crate::entities::Hill;
 use crate::map::Map;
+use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
+use rand::SeedableRng;
 use std::collections::HashMap;
 use std::fs;
 
@@ -16,6 +18,8 @@ pub struct Game {
     attack_radius2: usize,
     turn: usize,
     scores: Vec<usize>,
+    hive: Vec<usize>,
+    rng: StdRng,
 }
 
 /// Represents the state of the game.
@@ -88,7 +92,8 @@ impl Game {
     /// * `map_file` - The path to the file containing the map.
     /// * `fov_radius2` - The radius **squared** of the field of vision for each ant.
     /// * `attack_radius2` - The radius **squared** of the attack range for each ant.
-    pub fn new(map_file: &str, fov_radius2: usize, attack_radius2: usize) -> Game {
+    /// * `seed` - The seed for the random number generator.
+    pub fn new(map_file: &str, fov_radius2: usize, attack_radius2: usize, seed: u64) -> Game {
         match fs::read_to_string(map_file) {
             Ok(contents) => {
                 let map = Map::parse(&contents);
@@ -101,6 +106,9 @@ impl Game {
                     attack_radius2,
                     turn: 0,
                     scores: vec![0; players],
+                    hive: vec![0; players],
+                    // Initialize the `rng` with a seed of 0
+                    rng: StdRng::seed_from_u64(seed),
                 }
             }
             Err(e) => panic!("Could not read map file {} due to: {}", map_file, e),
@@ -112,30 +120,10 @@ impl Game {
         self.turn = 0;
         self.map = Map::parse(&self.map_contents);
 
-        let ant_hills: Vec<(usize, usize, usize)> = self
-            .map
-            .ant_hills()
-            .into_iter()
-            .map(|(hill, row, col)| (hill.player().unwrap(), row, col))
-            .collect();
-
-        // For each ant hill, collect up to 3 random land cells around it
-        let mut rng = &mut rand::thread_rng();
-        let lands: Vec<(usize, usize)> = ant_hills
-            .iter()
-            .flat_map(|(_, row, col)| {
-                self.map
-                    .land_around(*row, *col)
-                    .choose_multiple(&mut rng, 3)
-                    .cloned()
-                    .collect::<Vec<(usize, usize)>>()
-            })
-            .collect();
-
+        // Spawn food around all ant hills
+        spawn_food_around_hills(&mut self.map, &mut self.rng);
         // Spawn 1 ant per ant hill
-        spawn_ants(&mut self.map, ant_hills);
-        // Spawn food on the random land cells
-        spawn_food(&mut self.map, lands);
+        spawn_ants_all_hills(&mut self.map);
 
         // Compute the intial game state
         self.game_state()
@@ -146,6 +134,7 @@ impl Game {
         move_ants(&mut self.map, actions);
         attack(&mut self.map, self.attack_radius2);
         raze_hills(&mut self.map);
+        spawn_ants_from_hive(&mut self.map, &mut self.hive, &mut self.rng);
 
         self.turn += 1;
         self.game_state()
@@ -187,6 +176,40 @@ impl Game {
     }
 }
 
+fn spawn_ants_all_hills(map: &mut Map) {
+    spawn_ants(map, live_ant_hills(map));
+}
+
+fn spawn_ants_from_hive(map: &mut Map, hive: &mut [usize], rng: &mut StdRng) {
+    let players = map.players();
+    let hills_by_player = live_ant_hills(map)
+        .into_iter()
+        // Group hills by player
+        .fold(vec![vec![]; players], |mut acc, hill| {
+            acc[hill.0].push(hill);
+            acc
+        });
+
+    for player in 0..players {
+        let hills = &hills_by_player[player];
+        let available_food = hive[player];
+
+        if available_food == 0 {
+            continue;
+        }
+
+        // Randomly choose hills, up to the available food, to spawn ants on
+        // We do this withouth repetition to avoid spawning multiple ants on the same hill
+        let ant_hills = hills.choose_multiple(rng, available_food);
+
+        // Update the hive with the remaining food
+        hive[player] -= ant_hills.len();
+
+        // Spawn ants on the chosen hills
+        spawn_ants(map, ant_hills.cloned().collect());
+    }
+}
+
 fn spawn_ants(map: &mut Map, ant_hills: Vec<(usize, usize, usize)>) {
     for (player, row, col) in ant_hills {
         map.set(
@@ -198,6 +221,24 @@ fn spawn_ants(map: &mut Map, ant_hills: Vec<(usize, usize, usize)>) {
             )),
         );
     }
+}
+
+fn spawn_food_around_hills(map: &mut Map, rng: &mut StdRng) {
+    let ant_hills = live_ant_hills(map);
+
+    // For each ant hill, collect up to 3 random land cells around it
+    let lands: Vec<(usize, usize)> = ant_hills
+        .iter()
+        .flat_map(|(_, row, col)| {
+            map.land_around(*row, *col)
+                .choose_multiple(rng, 3)
+                .cloned()
+                .collect::<Vec<(usize, usize)>>()
+        })
+        .collect();
+
+    // Spawn food on the random land cells
+    spawn_food(map, lands);
 }
 
 fn spawn_food(map: &mut Map, locations: Vec<(usize, usize)>) {
@@ -284,6 +325,14 @@ fn raze_hills(map: &mut Map) {
     }
 }
 
+fn live_ant_hills(map: &Map) -> Vec<(usize, usize, usize)> {
+    map.ant_hills()
+        .into_iter()
+        .filter(|(hill, _, _)| hill.alive().unwrap())
+        .map(|(hill, row, col)| (hill.player().unwrap(), row, col))
+        .collect()
+}
+
 fn live_ants(map: &Map) -> Vec<(&dyn Entity, usize, usize)> {
     map.ants()
         .into_iter()
@@ -324,7 +373,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_the_map_is_reset() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 0);
 
         game.map.set(0, 0, Box::new(Food));
         game.start();
@@ -336,7 +385,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_ants_are_spawned_on_ant_hills() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 0);
 
         game.start();
 
@@ -358,7 +407,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_food_is_spawned_around_land_locations_for_each_ant_hill() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 0);
 
         game.start();
 
@@ -378,7 +427,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_the_correct_game_state_is_returned() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 0);
 
         let state = game.start();
 
@@ -662,5 +711,127 @@ mod tests {
             .unwrap()
             .alive()
             .unwrap());
+    }
+
+    #[test]
+    fn when_spawning_ants_from_hive_if_there_is_no_food_no_ants_are_spawned() {
+        let map = "\
+            rows 2
+            cols 2
+            players 2
+            m 01
+            m ..";
+        let mut map = Map::parse(map);
+        let mut hive = vec![0, 0];
+
+        spawn_ants_from_hive(&mut map, &mut hive, &mut StdRng::seed_from_u64(0));
+
+        assert_eq!(map.get(0, 0).unwrap().name(), "Hill");
+        assert_eq!(map.get(0, 1).unwrap().name(), "Hill");
+        assert_eq!(hive, vec![0, 0]);
+    }
+
+    #[test]
+    fn when_spawning_ants_from_hive_if_the_hill_is_razed_no_ants_are_spawned() {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m 0.
+            m ..";
+        let mut map = Map::parse(map);
+        let mut hive = vec![1];
+
+        // Raze the hill
+        map.get_mut(0, 0).unwrap().set_alive(false);
+
+        spawn_ants_from_hive(&mut map, &mut hive, &mut StdRng::seed_from_u64(0));
+
+        assert_eq!(map.get(0, 0).unwrap().name(), "Hill");
+        assert_eq!(hive, vec![1]);
+    }
+
+    #[test]
+    fn when_spawning_ants_from_hive_if_there_is_food_and_one_hill_one_ant_is_spawned() {
+        let map = "\
+            rows 2
+            cols 2
+            players 2
+            m 01
+            m ..";
+        let mut map = Map::parse(map);
+        let mut hive = vec![1, 1];
+
+        spawn_ants_from_hive(&mut map, &mut hive, &mut StdRng::seed_from_u64(0));
+
+        assert_eq!(map.get(0, 0).unwrap().name(), "Ant");
+        assert_eq!(map.get(0, 0).unwrap().player().unwrap(), 0);
+        assert_eq!(map.get(0, 1).unwrap().name(), "Ant");
+        assert_eq!(map.get(0, 1).unwrap().player().unwrap(), 1);
+        assert_eq!(hive, vec![0, 0]);
+    }
+
+    #[test]
+    fn when_spawning_ants_from_hive_if_there_is_more_food_and_one_hill_only_one_ant_is_spawned() {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m 0.
+            m ..";
+        let mut map = Map::parse(map);
+        let mut hive = vec![5];
+
+        spawn_ants_from_hive(&mut map, &mut hive, &mut StdRng::seed_from_u64(0));
+
+        assert_eq!(map.get(0, 0).unwrap().name(), "Ant");
+        assert_eq!(hive, vec![4]);
+    }
+
+    #[test]
+    fn when_spawning_ants_from_hive_if_there_is_only_one_food_and_multiple_hills_only_one_ant_is_spawned(
+    ) {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m 0.
+            m .0";
+        let mut map = Map::parse(map);
+        let mut hive = vec![1];
+
+        spawn_ants_from_hive(&mut map, &mut hive, &mut StdRng::seed_from_u64(0));
+
+        // Hill is chosen at random and we make it predictable based on the seed
+        assert_eq!(map.get(0, 0).unwrap().name(), "Hill");
+        assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
+        assert_eq!(hive, vec![0]);
+    }
+
+    #[test]
+    fn when_spawning_ants_from_hive_if_there_is_enough_food_and_multiple_hills_one_ant_is_spawned_per_hill(
+    ) {
+        let map = "\
+            rows 2
+            cols 2
+            players 2
+            m 01
+            m 10";
+        let mut map = Map::parse(map);
+        let mut hive = vec![5, 2];
+
+        spawn_ants_from_hive(&mut map, &mut hive, &mut StdRng::seed_from_u64(0));
+
+        assert_eq!(map.get(0, 0).unwrap().name(), "Ant");
+        assert_eq!(map.get(0, 0).unwrap().player().unwrap(), 0);
+        assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
+        assert_eq!(map.get(1, 1).unwrap().player().unwrap(), 0);
+
+        assert_eq!(map.get(0, 1).unwrap().name(), "Ant");
+        assert_eq!(map.get(0, 1).unwrap().player().unwrap(), 1);
+        assert_eq!(map.get(1, 0).unwrap().name(), "Ant");
+        assert_eq!(map.get(1, 0).unwrap().player().unwrap(), 1);
+
+        assert_eq!(hive, vec![3, 0]);
     }
 }

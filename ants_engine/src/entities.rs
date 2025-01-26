@@ -144,6 +144,10 @@ impl Entity for Hill {
         Some(self.alive)
     }
 
+    fn set_alive(&mut self, value: bool) {
+        self.alive = value;
+    }
+
     fn char(&self) -> char {
         match self.alive {
             true => (self.player + '0' as usize) as u8 as char,
