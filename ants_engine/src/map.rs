@@ -85,6 +85,10 @@ impl Map {
         self.all(|entity| matches!(entity.name(), "Ant"))
     }
 
+    pub fn food(&self) -> Vec<(&dyn Entity, usize, usize)> {
+        self.all(|entity| matches!(entity.name(), "Food"))
+    }
+
     pub fn land_around(&self, row: usize, col: usize) -> Vec<(usize, usize)> {
         // For each coordinate around the given one, check if the cell is empty
         // If it is, add it to the list of coordinates
@@ -449,6 +453,25 @@ mod tests {
         assert_eq!(ants[2].0.player().unwrap(), 2);
         assert_eq!(ants[2].1, 2);
         assert_eq!(ants[2].2, 1);
+    }
+
+    #[test]
+    fn when_getting_all_food_the_correct_entities_are_returned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m .0.
+            m .*.
+            m .0.";
+        let map = Map::parse(map);
+
+        let food = map.food();
+        assert_eq!(food.len(), 1);
+
+        assert_eq!(food[0].0.name(), "Food");
+        assert_eq!(food[0].1, 1);
+        assert_eq!(food[0].2, 1);
     }
 
     #[test]
