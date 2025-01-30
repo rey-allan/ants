@@ -89,6 +89,24 @@ impl Map {
         self.all(|entity| matches!(entity.name(), "Food"))
     }
 
+    pub fn land(&self) -> Vec<(usize, usize)> {
+        // Land are all the empty cells
+        // As with the `all` method, this is inefficient but should be fine for the size of our maps
+        // If we end up using larger maps, we will need to optimize this
+        self.grid
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entity)| {
+                if entity.is_none() {
+                    let row = index / self.width;
+                    let col = index % self.width;
+                    return Some((row, col));
+                }
+                None
+            })
+            .collect()
+    }
+
     pub fn land_around(&self, row: usize, col: usize) -> Vec<(usize, usize)> {
         // For each coordinate around the given one, check if the cell is empty
         // If it is, add it to the list of coordinates
@@ -265,6 +283,7 @@ impl Map {
     fn all(&self, filter: fn(&Box<dyn Entity>) -> bool) -> Vec<(&dyn Entity, usize, usize)> {
         // Inefficient way to get all entities using some filter (linear time complexity)
         // But it should be fine since maps are small, the largest having roughly 15K or so cells
+        // If we end up using larger maps, we will need to optimize this
         self.grid
             .iter()
             .enumerate()
@@ -472,6 +491,24 @@ mod tests {
         assert_eq!(food[0].0.name(), "Food");
         assert_eq!(food[0].1, 1);
         assert_eq!(food[0].2, 1);
+    }
+
+    #[test]
+    fn when_getting_all_land_the_correct_coordinates_are_returned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m .0.
+            m .*.
+            m .0.";
+        let map = Map::parse(map);
+
+        let land = map.land();
+        let expected_land = vec![(0, 0), (0, 2), (1, 0), (1, 2), (2, 0), (2, 2)];
+
+        assert_eq!(land.len(), 6);
+        assert_eq!(land, expected_land);
     }
 
     #[test]
