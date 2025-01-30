@@ -140,6 +140,7 @@ impl Game {
 
     /// Updates the game state based on the actions provided for each ant.
     pub fn update(&mut self, actions: Vec<Action>) -> GameState {
+        remove_dead_ants(&mut self.map);
         move_ants(&mut self.map, actions);
         attack(&mut self.map, self.attack_radius2);
         raze_hills(&mut self.map);
@@ -254,6 +255,19 @@ fn spawn_food_around_hills(map: &mut Map, rng: &mut StdRng) {
 fn spawn_food(map: &mut Map, locations: Vec<(usize, usize)>) {
     for (row, col) in locations {
         map.set(row, col, Box::new(Food));
+    }
+}
+
+fn remove_dead_ants(map: &mut Map) {
+    let dead_ants = map
+        .ants()
+        .into_iter()
+        .filter(|(ant, _, _)| !ant.alive().unwrap())
+        .map(|(_, row, col)| (row, col))
+        .collect::<Vec<(usize, usize)>>();
+
+    for (row, col) in dead_ants {
+        map.remove(row, col);
     }
 }
 
@@ -503,6 +517,41 @@ mod tests {
             .field_of_vision
             .iter()
             .any(|entity| entity.name == "Water" && entity.row == 0 && entity.col == 0));
+    }
+
+    #[test]
+    fn when_removing_dead_ants_all_dead_ants_are_removed() {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m 0.
+            m a.";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(1, 0).unwrap().alive().unwrap());
+        map.get_mut(1, 0).unwrap().set_alive(false);
+
+        remove_dead_ants(&mut map);
+
+        assert!(map.get(1, 0).is_none());
+    }
+
+    #[test]
+    fn when_removing_dead_ants_if_there_are_no_dead_ants_no_ants_are_removed() {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m 0.
+            m a.";
+        let mut map = Map::parse(map);
+
+        assert!(map.get(1, 0).unwrap().alive().unwrap());
+
+        remove_dead_ants(&mut map);
+
+        assert!(map.get(1, 0).is_some());
     }
 
     #[test]
