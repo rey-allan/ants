@@ -85,8 +85,11 @@ impl Map {
         self.all(|entity| matches!(entity.name(), "Ant"))
     }
 
-    pub fn food(&self) -> Vec<(&dyn Entity, usize, usize)> {
+    pub fn food(&self) -> Vec<(usize, usize)> {
         self.all(|entity| matches!(entity.name(), "Food"))
+            .into_iter()
+            .map(|(_, row, col)| (row, col))
+            .collect()
     }
 
     pub fn land(&self) -> Vec<(usize, usize)> {
@@ -488,9 +491,8 @@ mod tests {
         let food = map.food();
         assert_eq!(food.len(), 1);
 
-        assert_eq!(food[0].0.name(), "Food");
+        assert_eq!(food[0].0, 1);
         assert_eq!(food[0].1, 1);
-        assert_eq!(food[0].2, 1);
     }
 
     #[test]

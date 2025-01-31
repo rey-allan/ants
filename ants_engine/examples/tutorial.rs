@@ -4,7 +4,7 @@ use std::thread::sleep;
 
 fn main() {
     let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-    let mut game = Game::new(map_file.to_str().unwrap(), 4, 5, 1, 0);
+    let mut game = Game::new(map_file.to_str().unwrap(), 4, 5, 1, 5, 0);
 
     game.start();
     game.draw();

@@ -20,6 +20,7 @@ pub struct Game {
     turn: usize,
     scores: Vec<usize>,
     hive: Vec<usize>,
+    food_per_turn: usize,
     rng: StdRng,
 }
 
@@ -94,12 +95,14 @@ impl Game {
     /// * `fov_radius2` - The radius **squared** of the field of vision for each ant.
     /// * `attack_radius2` - The radius **squared** of the attack range for each ant.
     /// * `food_radius2` - The radius **squared** of the range around ants to harvest food.
+    /// * `food_rate` - The amount of food to spawn *per player* on each round.
     /// * `seed` - The seed for the random number generator.
     pub fn new(
         map_file: &str,
         fov_radius2: usize,
         attack_radius2: usize,
         food_radius2: usize,
+        food_rate: usize,
         seed: u64,
     ) -> Game {
         match fs::read_to_string(map_file) {
@@ -116,6 +119,7 @@ impl Game {
                     turn: 0,
                     scores: vec![0; players],
                     hive: vec![0; players],
+                    food_per_turn: food_rate * players,
                     // Initialize the `rng` with a seed of 0
                     rng: StdRng::seed_from_u64(seed),
                 }
@@ -146,6 +150,11 @@ impl Game {
         raze_hills(&mut self.map);
         spawn_ants_from_hive(&mut self.map, &mut self.hive, &mut self.rng);
         harvest_food(&mut self.map, &mut self.hive, self.food_radius2);
+        // Opted for spawning food randomly across the map instead of doing the symmetric spawning that the original Ants game used.
+        // The reason is that random food makes the game more challenging as it could lead to scenarios where agents aren't near any food.
+        // This will require better learning and handling of complex world states.
+        // Which we hope will ultimately lead to more robust agents.
+        spawn_food_randomly(&mut self.map, &mut self.rng, self.food_per_turn);
 
         self.turn += 1;
         self.game_state()
@@ -252,6 +261,13 @@ fn spawn_food_around_hills(map: &mut Map, rng: &mut StdRng) {
     spawn_food(map, lands);
 }
 
+fn spawn_food_randomly(map: &mut Map, rng: &mut StdRng, food_per_turn: usize) {
+    let land = map.land();
+    let food_locations = land.choose_multiple(rng, food_per_turn).cloned().collect();
+
+    spawn_food(map, food_locations);
+}
+
 fn spawn_food(map: &mut Map, locations: Vec<(usize, usize)>) {
     for (row, col) in locations {
         map.set(row, col, Box::new(Food));
@@ -350,11 +366,7 @@ fn raze_hills(map: &mut Map) {
 }
 
 fn harvest_food(map: &mut Map, hive: &mut [usize], food_radius2: usize) {
-    let food = map
-        .food()
-        .into_iter()
-        .map(|(_, row, col)| (row, col))
-        .collect::<Vec<(usize, usize)>>();
+    let food = map.food();
 
     for (row, col) in food {
         let unique_player_ants_around_food = map
@@ -426,7 +438,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_the_map_is_reset() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 1, 0);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 1, 5, 0);
 
         game.map.set(0, 0, Box::new(Food));
         game.start();
@@ -438,7 +450,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_ants_are_spawned_on_ant_hills() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 1, 0);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 1, 5, 0);
 
         game.start();
 
@@ -460,7 +472,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_food_is_spawned_around_land_locations_for_each_ant_hill() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 1, 0);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 1, 5, 0);
 
         game.start();
 
@@ -480,7 +492,7 @@ mod tests {
     #[test]
     fn when_starting_a_game_the_correct_game_state_is_returned() {
         let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
-        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 1, 0);
+        let mut game = Game::new(map_file.to_str().unwrap(), 4, 4, 1, 5, 0);
 
         let state = game.start();
 
@@ -981,5 +993,69 @@ mod tests {
         assert!(map.get(0, 0).is_none());
         assert!(map.get(2, 2).is_none());
         assert_eq!(hive, vec![0, 0]);
+    }
+
+    #[test]
+    fn when_spawning_food_randomly_and_there_is_enough_land_all_food_is_spawned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a.
+            m ...";
+        let mut map = Map::parse(map);
+
+        spawn_food_randomly(&mut map, &mut StdRng::seed_from_u64(0), 8);
+
+        let food = map.food();
+        let expected_food = vec![
+            (0, 0),
+            (0, 1),
+            (0, 2),
+            (1, 0),
+            (1, 2),
+            (2, 0),
+            (2, 1),
+            (2, 2),
+        ];
+
+        assert_eq!(food.len(), 8);
+        assert_eq!(food, expected_food);
+    }
+
+    #[test]
+    fn when_spawning_food_randomly_and_there_is_not_enough_land_not_all_food_is_spawned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 2
+            m aa.
+            m .a.
+            m b.b";
+        let mut map = Map::parse(map);
+
+        spawn_food_randomly(&mut map, &mut StdRng::seed_from_u64(0), 9);
+
+        let food = map.food();
+        let expected_food = vec![(0, 2), (1, 0), (1, 2), (2, 1)];
+
+        assert_eq!(food.len(), 4);
+        assert_eq!(food, expected_food);
+    }
+
+    #[test]
+    fn when_spawning_food_randomly_and_there_is_no_land_no_food_is_spawned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 2
+            m aaa
+            m aaa
+            m aba";
+        let mut map = Map::parse(map);
+
+        spawn_food_randomly(&mut map, &mut StdRng::seed_from_u64(0), 9);
+        assert!(map.food().is_empty());
     }
 }
