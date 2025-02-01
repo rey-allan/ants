@@ -470,11 +470,6 @@ impl Game {
         let total_ants = self.map.ants().len();
         let food_pct = total_food as f64 / (total_food + total_ants) as f64;
 
-        println!(
-            "Food: {}, Ants: {}, Food %: {}",
-            total_food, total_ants, food_pct
-        );
-
         // If the food is 85% or more of the count of ants and food then the food is not being gathered properly
         if food_pct >= 0.85 {
             self.cutoff_counts_per_reason
