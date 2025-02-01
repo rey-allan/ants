@@ -6,6 +6,7 @@
 pub mod game;
 pub use game::Action;
 pub use game::Direction;
+pub use game::FinishedReason;
 pub use game::Game;
 pub use game::GameState;
 

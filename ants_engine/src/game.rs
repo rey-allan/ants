@@ -20,6 +20,10 @@ pub struct Game {
     scores: Vec<usize>,
     hive: Vec<usize>,
     food_per_turn: usize,
+    finished: bool,
+    finished_reason: Option<FinishedReason>,
+    cutoff_threshold: usize,
+    cutoff_counts_per_reason: HashMap<FinishedReason, usize>,
     rng: StdRng,
 }
 
@@ -39,6 +43,13 @@ pub enum Direction {
     East,
     South,
     West,
+}
+
+/// Represents the reason the game finished.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum FinishedReason {
+    /// The game ended because food was not being consumed and it reached 90% or more of the map.
+    TooMuchFood,
 }
 
 /// Represents an action an ant can take.
@@ -117,6 +128,10 @@ impl Game {
             scores: vec![0; players],
             hive: vec![0; players],
             food_per_turn: food_rate * players,
+            finished: false,
+            finished_reason: None,
+            cutoff_threshold: 150,
+            cutoff_counts_per_reason: HashMap::new(),
             // Initialize the `rng` with a seed of 0
             rng: StdRng::seed_from_u64(seed),
         }
@@ -125,6 +140,8 @@ impl Game {
     /// Starts the game.
     pub fn start(&mut self) -> GameState {
         self.turn = 0;
+        self.finished = false;
+        self.finished_reason = None;
         self.map = Map::parse(&self.map_contents);
 
         self.spawn_food_around_hills();
@@ -136,6 +153,8 @@ impl Game {
 
     /// Updates the game state based on the actions provided for each ant.
     pub fn update(&mut self, actions: Vec<Action>) -> GameState {
+        self.turn += 1;
+
         self.remove_dead_ants();
         self.move_ants(actions);
         self.attack();
@@ -148,7 +167,7 @@ impl Game {
         // Which we hope will ultimately lead to more robust agents.
         self.spawn_food_randomly();
 
-        self.turn += 1;
+        self.check_for_endgame();
         self.game_state()
     }
 
@@ -431,6 +450,42 @@ impl Game {
             col,
             player: entity.player(),
             alive: entity.alive(),
+        }
+    }
+
+    fn check_for_endgame(&mut self) {
+        self.check_for_food_not_being_gathered();
+
+        for (reason, count) in &self.cutoff_counts_per_reason {
+            if *count >= self.cutoff_threshold {
+                self.finished = true;
+                self.finished_reason = Some(reason.clone());
+                return;
+            }
+        }
+    }
+
+    fn check_for_food_not_being_gathered(&mut self) {
+        let total_food = self.map.food().len();
+        let total_ants = self.map.ants().len();
+        let food_pct = total_food as f64 / (total_food + total_ants) as f64;
+
+        println!(
+            "Food: {}, Ants: {}, Food %: {}",
+            total_food, total_ants, food_pct
+        );
+
+        // If the food is 85% or more of the count of ants and food then the food is not being gathered properly
+        if food_pct >= 0.85 {
+            self.cutoff_counts_per_reason
+                .entry(FinishedReason::TooMuchFood)
+                .and_modify(|count| *count += 1)
+                .or_insert(1);
+        } else {
+            // Reset the count if the food is being gathered properly
+            self.cutoff_counts_per_reason
+                .entry(FinishedReason::TooMuchFood)
+                .or_insert(0);
         }
     }
 }
@@ -1085,5 +1140,23 @@ mod tests {
 
         game.spawn_food_randomly();
         assert!(game.map.food().is_empty());
+    }
+
+    #[test]
+    fn when_checking_for_endgame_if_the_food_is_not_being_gathered_the_game_ends() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m *a*
+            m ***
+            m .**";
+        let mut game = Game::new(map, 4, 5, 1, 5, 0);
+        game.cutoff_threshold = 1;
+
+        game.check_for_endgame();
+
+        assert!(game.finished);
+        assert_eq!(game.finished_reason, Some(FinishedReason::TooMuchFood));
     }
 }
