@@ -23,7 +23,7 @@ pub struct Game {
     finished: bool,
     finished_reason: Option<FinishedReason>,
     cutoff_threshold: usize,
-    cutoff_counts_per_reason: HashMap<FinishedReason, usize>,
+    turns_with_too_much_food: usize,
     rng: StdRng,
 }
 
@@ -48,6 +48,8 @@ pub enum Direction {
 /// Represents the reason the game finished.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum FinishedReason {
+    /// The game ended because there was only one player left.
+    LoneSurvivor,
     /// The game ended because food was not being consumed and it reached 90% or more of the map.
     TooMuchFood,
 }
@@ -131,7 +133,7 @@ impl Game {
             finished: false,
             finished_reason: None,
             cutoff_threshold: 150,
-            cutoff_counts_per_reason: HashMap::new(),
+            turns_with_too_much_food: 0,
             // Initialize the `rng` with a seed of 0
             rng: StdRng::seed_from_u64(seed),
         }
@@ -142,6 +144,7 @@ impl Game {
         self.turn = 0;
         self.finished = false;
         self.finished_reason = None;
+        self.turns_with_too_much_food = 0;
         self.map = Map::parse(&self.map_contents);
 
         self.spawn_food_around_hills();
@@ -456,12 +459,18 @@ impl Game {
     fn check_for_endgame(&mut self) {
         self.check_for_food_not_being_gathered();
 
-        for (reason, count) in &self.cutoff_counts_per_reason {
-            if *count >= self.cutoff_threshold {
-                self.finished = true;
-                self.finished_reason = Some(reason.clone());
-                return;
-            }
+        if self.turns_with_too_much_food >= self.cutoff_threshold {
+            self.finished = true;
+            self.finished_reason = Some(FinishedReason::TooMuchFood);
+
+            return;
+        }
+
+        if self.remaining_players() == 1 {
+            self.finished = true;
+            self.finished_reason = Some(FinishedReason::LoneSurvivor);
+
+            return;
         }
     }
 
@@ -472,16 +481,19 @@ impl Game {
 
         // If the food is 85% or more of the count of ants and food then the food is not being gathered properly
         if food_pct >= 0.85 {
-            self.cutoff_counts_per_reason
-                .entry(FinishedReason::TooMuchFood)
-                .and_modify(|count| *count += 1)
-                .or_insert(1);
+            self.turns_with_too_much_food += 1;
         } else {
             // Reset the count if the food is being gathered properly
-            self.cutoff_counts_per_reason
-                .entry(FinishedReason::TooMuchFood)
-                .or_insert(0);
+            self.turns_with_too_much_food = 0;
         }
+    }
+
+    fn remaining_players(&self) -> usize {
+        self.live_ants()
+            .into_iter()
+            .map(|(ant, _, _)| ant.player().unwrap())
+            .collect::<HashSet<usize>>()
+            .len()
     }
 }
 
@@ -1153,5 +1165,22 @@ mod tests {
 
         assert!(game.finished);
         assert_eq!(game.finished_reason, Some(FinishedReason::TooMuchFood));
+    }
+
+    #[test]
+    fn when_checking_for_endgame_if_only_one_player_remains_with_ants_the_game_ends() {
+        let map = "\
+            rows 3
+            cols 3
+            players 2
+            m a..
+            m aa.
+            m ...";
+        let mut game = Game::new(map, 4, 5, 1, 5, 0);
+
+        game.check_for_endgame();
+
+        assert!(game.finished);
+        assert_eq!(game.finished_reason, Some(FinishedReason::LoneSurvivor));
     }
 }
