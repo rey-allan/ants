@@ -152,6 +152,7 @@ impl Game {
         self.finished = false;
         self.finished_reason = None;
         self.turns_with_too_much_food = 0;
+        self.hive = vec![0; self.map.players()];
         self.map = Map::parse(&self.map_contents);
 
         self.compute_initial_scores();
