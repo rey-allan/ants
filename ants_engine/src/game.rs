@@ -24,6 +24,8 @@ pub struct Game {
     finished_reason: Option<FinishedReason>,
     cutoff_threshold: usize,
     turns_with_too_much_food: usize,
+    points_for_razing_hill: usize,
+    points_for_losing_hill: usize,
     rng: StdRng,
 }
 
@@ -134,6 +136,8 @@ impl Game {
             finished_reason: None,
             cutoff_threshold: 150,
             turns_with_too_much_food: 0,
+            points_for_razing_hill: 2,
+            points_for_losing_hill: 1,
             // Initialize the `rng` with a seed of 0
             rng: StdRng::seed_from_u64(seed),
         }
@@ -147,6 +151,7 @@ impl Game {
         self.turns_with_too_much_food = 0;
         self.map = Map::parse(&self.map_contents);
 
+        self.compute_initial_scores();
         self.spawn_food_around_hills();
         self.spawn_ants_all_hills();
 
@@ -177,6 +182,15 @@ impl Game {
     /// Draws the game to the console.
     pub fn draw(&self) {
         self.map.draw(self.turn);
+    }
+
+    fn compute_initial_scores(&mut self) {
+        // Each agent starts with 1 point per hill
+        let ants_hills_per_player = self.live_ant_hills_per_player();
+
+        for (player, hills) in ants_hills_per_player.iter().enumerate() {
+            self.scores[player] = hills.len();
+        }
     }
 
     fn spawn_food_around_hills(&mut self) {
@@ -221,14 +235,7 @@ impl Game {
 
     fn spawn_ants_from_hive(&mut self) {
         let players = self.map.players();
-        let hills_by_player = self
-            .live_ant_hills()
-            .into_iter()
-            // Group hills by player
-            .fold(vec![vec![]; players], |mut acc, hill| {
-                acc[hill.0].push(hill);
-                acc
-            });
+        let hills_by_player = self.live_ant_hills_per_player();
 
         for (player, hills) in hills_by_player.iter().enumerate().take(players) {
             let available_food = self.hive[player];
@@ -333,7 +340,7 @@ impl Game {
 
     fn raze_hills(&mut self) {
         let ants = self.live_ants();
-        let hills_to_raze: Vec<(usize, usize, usize)> = ants
+        let hills_to_raze: Vec<(usize, usize, usize, usize)> = ants
             .into_iter()
             .filter_map(|(ant, row, col)| {
                 // If the ant is on an ant hill that is not its own, the hill should be razed
@@ -342,18 +349,24 @@ impl Game {
                         != ant.on_ant_hill().as_ref().unwrap().player().unwrap()
                 {
                     let hill_owner = ant.on_ant_hill().as_ref().unwrap().player().unwrap();
-                    Some((hill_owner, row, col))
+                    let player = ant.player().unwrap();
+                    Some((hill_owner, player, row, col))
                 } else {
                     None
                 }
             })
             .collect();
 
-        for (player, row, col) in hills_to_raze {
+        for (hill_owner, player, row, col) in hills_to_raze {
+            // Add the points for razin the hill to the player's score
+            self.scores[player] += self.points_for_razing_hill;
+            // Subtract the points for losing the hill from the hill owner's score
+            self.scores[hill_owner] -= self.points_for_losing_hill;
+            // Update the hill to be razed
             self.map
                 .get_mut(row, col)
                 .unwrap()
-                .set_on_ant_hill(Box::new(Hill::new(player, false)));
+                .set_on_ant_hill(Box::new(Hill::new(hill_owner, false)));
         }
     }
 
@@ -381,6 +394,17 @@ impl Game {
 
             self.map.remove(row, col);
         }
+    }
+
+    fn live_ant_hills_per_player(&self) -> Vec<Vec<(usize, usize, usize)>> {
+        let players = self.map.players();
+        self.live_ant_hills()
+            .into_iter()
+            // Group hills by player
+            .fold(vec![vec![]; players], |mut acc, hill| {
+                acc[hill.0].push(hill);
+                acc
+            })
     }
 
     fn live_ant_hills(&self) -> Vec<(usize, usize, usize)> {
@@ -499,6 +523,8 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use super::*;
     use crate::entities::Food;
 
@@ -591,7 +617,7 @@ mod tests {
         assert_eq!(state.turn, 0);
 
         // The map has 2 players
-        assert_eq!(state.scores, vec![0, 0]);
+        assert_eq!(state.scores, vec![1, 1]);
         assert_eq!(state.ants.len(), 2);
 
         // The map has 1 ant hill at (3, 2) for player 0
@@ -621,6 +647,24 @@ mod tests {
             .field_of_vision
             .iter()
             .any(|entity| entity.name == "Water" && entity.row == 0 && entity.col == 0));
+    }
+
+    #[test]
+    fn when_starting_a_game_the_initial_scores_are_computed_as_the_number_of_ant_hills_per_player()
+    {
+        let map = "\
+            rows 4
+            cols 4
+            players 2
+            m %1.%
+            m %1.%
+            m %..%
+            m %00%";
+        let mut game = Game::new(map, 4, 4, 1, 5, 0);
+
+        game.start();
+
+        assert_eq!(game.scores, vec![2, 2]);
     }
 
     #[test]
@@ -815,45 +859,65 @@ mod tests {
     }
 
     #[test]
-    fn when_razing_hills_if_a_hill_does_not_have_an_ant_the_hill_is_not_razed() {
+    fn when_razing_hills_if_a_hill_does_not_have_an_ant_the_hill_is_not_razed_and_scores_are_not_changed(
+    ) {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m 0.
+            m ..";
+        let mut game = Game::new(map, 4, 5, 1, 5, 0);
+        game.compute_initial_scores();
+
+        assert_eq!(game.scores, vec![1]);
+        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
+
+        game.raze_hills();
+
+        assert_eq!(game.scores, vec![1]);
+        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_razing_hills_if_a_hill_has_an_ant_of_the_same_player_the_hill_is_not_razed_and_scores_are_not_changed(
+    ) {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m 0.
+            m a.";
+        let mut game = Game::new(map, 4, 5, 1, 5, 0);
+        game.compute_initial_scores();
+
+        assert_eq!(game.scores, vec![1]);
+        assert_eq!(game.map.get(0, 0).unwrap().name(), "Hill");
+        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
+
+        // Move the ant to the hill
+        game.map.move_entity((1, 0), (0, 0));
+        assert_eq!(game.map.get(0, 0).unwrap().name(), "Ant");
+
+        game.raze_hills();
+
+        assert_eq!(game.scores, vec![1]);
+        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_razing_hills_if_a_hill_has_a_dead_enemy_ant_the_hill_is_not_razed_and_scores_are_not_changed(
+    ) {
         let map = "\
             rows 2
             cols 2
             players 2
             m 0.
-            m ..";
+            m b1";
         let mut game = Game::new(map, 4, 5, 1, 5, 0);
+        game.compute_initial_scores();
 
-        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
-        game.raze_hills();
-        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
-    }
-
-    #[test]
-    fn when_razing_hills_if_a_hill_has_an_ant_of_the_same_player_the_hill_is_not_razed() {
-        let map = "\
-            rows 2
-            cols 2
-            players 2
-            m A.
-            m ..";
-        let mut game = Game::new(map, 4, 5, 1, 5, 0);
-
-        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
-        game.raze_hills();
-        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
-    }
-
-    #[test]
-    fn when_razing_hills_if_a_hill_has_a_dead_enemy_ant_the_hill_is_not_razed() {
-        let map = "\
-            rows 2
-            cols 2
-            players 2
-            m 0.
-            m b.";
-        let mut game = Game::new(map, 4, 5, 1, 5, 0);
-
+        assert_eq!(game.scores, vec![1, 1]);
         assert_eq!(game.map.get(0, 0).unwrap().name(), "Hill");
         assert!(game.map.get(0, 0).unwrap().alive().unwrap());
 
@@ -866,6 +930,7 @@ mod tests {
 
         game.raze_hills();
 
+        assert_eq!(game.scores, vec![1, 1]);
         assert!(game
             .map
             .get(0, 0)
@@ -878,15 +943,18 @@ mod tests {
     }
 
     #[test]
-    fn when_razing_hills_if_a_hill_has_an_alive_enemy_ant_the_hill_is_razed() {
+    fn when_razing_hills_if_a_hill_has_an_alive_enemy_ant_the_hill_is_razed_and_scores_are_updated()
+    {
         let map = "\
             rows 2
             cols 2
             players 2
             m 0.
-            m b.";
+            m b1";
         let mut game = Game::new(map, 4, 5, 1, 5, 0);
+        game.compute_initial_scores();
 
+        assert_eq!(game.scores, vec![1, 1]);
         assert_eq!(game.map.get(0, 0).unwrap().name(), "Hill");
         assert!(game.map.get(0, 0).unwrap().alive().unwrap());
 
@@ -896,6 +964,9 @@ mod tests {
 
         game.raze_hills();
 
+        // Player 0 loses 1 point for losing the hill
+        // Player 1 gains 2 points for razing the hill
+        assert_eq!(game.scores, vec![0, 3]);
         assert!(!game
             .map
             .get(0, 0)
