@@ -20,6 +20,7 @@ pub struct Game {
     scores: Vec<usize>,
     hive: Vec<usize>,
     food_per_turn: usize,
+    started: bool,
     finished: bool,
     finished_reason: Option<FinishedReason>,
     cutoff_threshold: usize,
@@ -132,6 +133,7 @@ impl Game {
             scores: vec![0; players],
             hive: vec![0; players],
             food_per_turn: food_rate * players,
+            started: false,
             finished: false,
             finished_reason: None,
             cutoff_threshold: 150,
@@ -146,6 +148,7 @@ impl Game {
     /// Starts the game.
     pub fn start(&mut self) -> GameState {
         self.turn = 0;
+        self.started = true;
         self.finished = false;
         self.finished_reason = None;
         self.turns_with_too_much_food = 0;
@@ -161,6 +164,14 @@ impl Game {
 
     /// Updates the game state based on the actions provided for each ant.
     pub fn update(&mut self, actions: Vec<Action>) -> GameState {
+        if !self.started {
+            panic!("Game has not started! Call `start` to start the game.");
+        }
+
+        if self.finished {
+            panic!("Game is finished! Call `start` to start a new game.");
+        }
+
         self.turn += 1;
 
         self.remove_dead_ants();
@@ -665,6 +676,39 @@ mod tests {
         game.start();
 
         assert_eq!(game.scores, vec![2, 2]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Game has not started! Call `start` to start the game.")]
+    fn when_updating_a_game_that_has_not_started_a_panic_occurs() {
+        let map = "\
+            rows 4
+            cols 4
+            players 2
+            m %1.%
+            m %..%
+            m %..%
+            m %.0%";
+        let mut game = Game::new(map, 4, 4, 1, 5, 0);
+        game.update(vec![]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Game is finished! Call `start` to start a new game.")]
+    fn when_updating_a_game_that_has_finished_a_panic_occurs() {
+        let map = "\
+            rows 4
+            cols 4
+            players 2
+            m %1.%
+            m %..%
+            m %..%
+            m %.0%";
+        let mut game = Game::new(map, 4, 4, 1, 5, 0);
+        game.started = true;
+        game.finished = true;
+
+        game.update(vec![]);
     }
 
     #[test]
