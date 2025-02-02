@@ -193,7 +193,13 @@ impl Game {
 
     /// Draws the game to the console.
     pub fn draw(&self) {
-        self.map.draw(self.turn);
+        let ants = self
+            .live_ants_per_player()
+            .iter()
+            .map(|ants| ants.len())
+            .collect::<Vec<usize>>();
+
+        self.map.draw(self.turn, &self.scores, &ants, &self.hive);
     }
 
     fn compute_initial_scores(&mut self) {
@@ -426,6 +432,17 @@ impl Game {
             .filter(|(hill, _, _)| hill.alive().unwrap())
             .map(|(hill, row, col)| (hill.player().unwrap(), row, col))
             .collect()
+    }
+
+    fn live_ants_per_player(&self) -> Vec<Vec<(&dyn Entity, usize, usize)>> {
+        let players = self.map.players();
+        self.live_ants()
+            .into_iter()
+            // Group ants by player
+            .fold(vec![vec![]; players], |mut acc, ant| {
+                acc[ant.0.player().unwrap()].push(ant);
+                acc
+            })
     }
 
     fn live_ants(&self) -> Vec<(&dyn Entity, usize, usize)> {

@@ -208,7 +208,7 @@ pub fn from_char(value: char) -> Option<Box<dyn Entity>> {
     }
 }
 
-fn player_to_color(player: usize) -> Color {
+pub fn player_to_color(player: usize) -> Color {
     match player {
         0 => Color::Red,
         1 => Color::Green,

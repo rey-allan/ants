@@ -1,4 +1,4 @@
-use crate::entities::{from_char, Ant, Entity, Hill};
+use crate::entities::{from_char, player_to_color, Ant, Entity, Hill};
 use crossterm::{
     cursor::Hide,
     execute,
@@ -238,9 +238,10 @@ impl Map {
         }
     }
 
-    pub fn draw(&self, turn: usize) {
+    pub fn draw(&self, turn: usize, scores: &[usize], ants: &[usize], hive: &[usize]) {
         let mut stdout = stdout();
 
+        // Display information about the game
         execute!(
             stdout,
             Clear(ClearType::All),
@@ -248,11 +249,31 @@ impl Map {
             Print("Players: "),
             Print(self.players.to_string()),
             Print("\nTurn: "),
-            Print(turn.to_string()),
-            Print("\n\n")
+            Print(turn.to_string())
         )
         .unwrap();
 
+        // Display information about the players
+        for player in 0..self.players {
+            execute!(
+                stdout,
+                SetForegroundColor(player_to_color(player)),
+                Print("\nPlayer "),
+                Print(player.to_string()),
+                Print(": "),
+                Print("Score = "),
+                Print(scores[player].to_string()),
+                Print(", Ants = "),
+                Print(ants[player].to_string()),
+                Print(", Hive = "),
+                Print(hive[player].to_string()),
+                SetForegroundColor(Color::Reset)
+            )
+            .unwrap();
+        }
+        execute!(stdout, Print("\n\n")).unwrap();
+
+        // Display the map
         for row in 0..self.height {
             for col in 0..self.width {
                 let entity = self.get(row, col);
