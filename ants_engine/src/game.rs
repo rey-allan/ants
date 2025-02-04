@@ -53,6 +53,8 @@ pub enum Direction {
 pub enum FinishedReason {
     /// The game ended because there was only one player left.
     LoneSurvivor,
+    /// The game ended because the rank stabilized, i.e. no player can surpass the current leader.
+    RankStabilized,
     /// The game ended because food was not being consumed and it reached 90% or more of the map.
     TooMuchFood,
 }
@@ -525,6 +527,13 @@ impl Game {
 
             return;
         }
+
+        if self.rank_stabilized() {
+            self.finished = true;
+            self.finished_reason = Some(FinishedReason::RankStabilized);
+
+            return;
+        }
     }
 
     fn check_for_food_not_being_gathered(&mut self) {
@@ -547,6 +556,53 @@ impl Game {
             .map(|(ant, _, _)| ant.player().unwrap())
             .collect::<HashSet<usize>>()
             .len()
+    }
+
+    fn rank_stabilized(&self) -> bool {
+        let live_ant_hills_per_player = self.live_ant_hills_per_player();
+        let current_scores = &self.scores;
+
+        // If all players are tied, the rank isn't stabilized yet
+        if current_scores
+            .iter()
+            .all(|score| *score == current_scores[0])
+        {
+            return false;
+        }
+
+        // Get the player that is in the lead
+        let (leader, leader_score) = current_scores
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, score)| *score)
+            .unwrap();
+
+        // For each other player, compute their score as if they were to raze all other hills
+        for player in 0..self.map.players() {
+            if player == leader {
+                continue;
+            }
+
+            let mut scores = current_scores.clone();
+            for (other_player, hills) in live_ant_hills_per_player.iter().enumerate() {
+                if other_player == player {
+                    continue;
+                }
+
+                // Add to the score as if the player razed all hills from the other player
+                scores[player] += hills.len() * self.points_for_razing_hill;
+                // Subtract from the score as if the other player lost all their hills
+                scores[other_player] -= hills.len() * self.points_for_losing_hill;
+            }
+
+            // If this player can surpass the leader, the rank isn't stabilized yet
+            if scores[player] > *leader_score {
+                return false;
+            }
+        }
+
+        // If no player can surpass the leader, the rank is stabilized
+        true
     }
 }
 
@@ -1315,5 +1371,75 @@ mod tests {
 
         assert!(game.finished);
         assert_eq!(game.finished_reason, Some(FinishedReason::LoneSurvivor));
+    }
+
+    #[test]
+    fn when_checking_for_endgame_if_all_players_are_tied_rank_is_not_stabilized_and_the_game_does_not_end(
+    ) {
+        let map = "\
+            rows 3
+            cols 3
+            players 2
+            m 0..
+            m ...
+            m ..1";
+        let mut game = Game::new(map, 4, 5, 1, 5, 0);
+        game.compute_initial_scores();
+
+        game.check_for_endgame();
+
+        assert!(!game.finished);
+        assert!(game.finished_reason.is_none());
+        // Sanity check to make sure the original scores are not changed
+        assert_eq!(game.scores, vec![1, 1]);
+    }
+
+    #[test]
+    fn when_checking_for_endgame_if_the_current_leader_cannot_be_surpassed_the_rank_is_stabilized_and_the_game_ends(
+    ) {
+        let map = "\
+            rows 3
+            cols 3
+            players 4
+            m 0..
+            m ...
+            m .3.";
+        let mut game = Game::new(map, 4, 5, 1, 5, 0);
+        // If player 0 razes the hills of player 1 and 2, the scores are 0=5, 1=0, 2=0, 3=1
+        // In this case, even if player 3 were to raze the hill of player 0, the score would be 0=4, 1=0, 2=0, 3=3
+        // so player 3 can't possibly do better than 2nd place and the game ends
+        game.scores = vec![5, 0, 0, 1];
+
+        game.check_for_endgame();
+
+        assert!(game.finished);
+        assert_eq!(game.finished_reason, Some(FinishedReason::RankStabilized));
+        // Sanity check to make sure the original scores are not changed
+        assert_eq!(game.scores, vec![5, 0, 0, 1]);
+    }
+
+    #[test]
+    fn when_checking_for_endgame_if_the_current_leader_can_be_surpassed_the_rank_is_not_stabilized_and_the_game_does_not_end(
+    ) {
+        let map = "\
+            rows 3
+            cols 3
+            players 4
+            m 0..
+            m .2.
+            m .3.";
+        let mut game = Game::new(map, 4, 5, 1, 5, 0);
+        // If player 0 razes the hills of player 1, the scores are 0=3, 1=0, 2=1, 3=1
+        // In this case, if player 2 were to raze all the other hills, the score would be 0=2, 1=0, 2=3, 3=0
+        // and player 2 would win, so the rank is not stabilized yet.
+        // Note that the same happens if player 3 were to raze all the other hills.
+        game.scores = vec![3, 0, 1, 1];
+
+        game.check_for_endgame();
+
+        assert!(!game.finished);
+        assert!(game.finished_reason.is_none());
+        // Sanity check to make sure the original scores are not changed
+        assert_eq!(game.scores, vec![3, 0, 1, 1]);
     }
 }
