@@ -10,7 +10,7 @@ fn main() {
         Err(e) => panic!("Error reading map file: {}", e),
     };
 
-    let mut game = Game::new(&map_contents, 4, 5, 1, 5, 0);
+    let mut game = Game::new(&map_contents, 4, 5, 1, 5, 1500, 0);
 
     game.start();
     game.draw();
