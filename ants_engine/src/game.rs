@@ -39,6 +39,10 @@ pub struct GameState {
     scores: Vec<usize>,
     /// The ants for each player where the index is the player number.
     ants: Vec<Vec<PlayerAnt>>,
+    /// Whether the game has finished.
+    finished: bool,
+    /// The reason the game finished. None if the game has not finished.
+    finished_reason: Option<FinishedReason>,
 }
 
 /// Represents the direction an ant can move.
@@ -504,6 +508,8 @@ impl Game {
             turn: self.turn,
             scores: self.scores.clone(),
             ants,
+            finished: self.finished,
+            finished_reason: self.finished_reason.clone(),
         }
     }
 
@@ -711,6 +717,8 @@ mod tests {
         let state = game.start();
 
         assert_eq!(state.turn, 0);
+        assert!(!state.finished);
+        assert!(state.finished_reason.is_none());
 
         // The map has 2 players
         assert_eq!(state.scores, vec![1, 1]);
@@ -722,13 +730,22 @@ mod tests {
         assert_eq!(state.ants[0][0].col, 2);
         assert_eq!(state.ants[0][0].player, 0);
         assert!(state.ants[0][0].alive);
-        // Given the fov radius of 2, the ant at (3, 2) should see 7 entities
-        assert_eq!(state.ants[0][0].field_of_vision.len(), 7);
+        // Given the fov radius of 2, the ant at (3, 2) should see 8 entities
+        assert_eq!(state.ants[0][0].field_of_vision.len(), 8);
         // Let's check that it was able to see the water next to it at (3, 3)
         assert!(state.ants[0][0]
             .field_of_vision
             .iter()
             .any(|entity| entity.name == "Water" && entity.row == 3 && entity.col == 3));
+        // Let's also check that it was able to see the ant hill where it is standing at (3, 2)
+        assert!(state.ants[0][0]
+            .field_of_vision
+            .iter()
+            .any(|entity| entity.name == "Hill"
+                && entity.row == 3
+                && entity.col == 2
+                && entity.player.unwrap() == 0
+                && entity.alive.unwrap()));
 
         // The map has 1 ant hill at (0, 1) for player 1
         assert_eq!(state.ants[1].len(), 1);
@@ -736,13 +753,22 @@ mod tests {
         assert_eq!(state.ants[1][0].col, 1);
         assert_eq!(state.ants[1][0].player, 1);
         assert!(state.ants[1][0].alive);
-        // Given the fov radius of 2, the ant at (0, 1) should see 7 entities
-        assert_eq!(state.ants[1][0].field_of_vision.len(), 7);
+        // Given the fov radius of 2, the ant at (0, 1) should see 8 entities
+        assert_eq!(state.ants[1][0].field_of_vision.len(), 8);
         // Let's check that it was able to see the water next to it at (0, 0)
         assert!(state.ants[1][0]
             .field_of_vision
             .iter()
             .any(|entity| entity.name == "Water" && entity.row == 0 && entity.col == 0));
+        // Let's also check that it was able to see the ant hill where it is standing at (0, 1)
+        assert!(state.ants[1][0]
+            .field_of_vision
+            .iter()
+            .any(|entity| entity.name == "Hill"
+                && entity.row == 0
+                && entity.col == 1
+                && entity.player.unwrap() == 1
+                && entity.alive.unwrap()));
     }
 
     #[test]

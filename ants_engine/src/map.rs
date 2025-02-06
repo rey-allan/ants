@@ -160,12 +160,18 @@ impl Map {
             for j in col.saturating_sub(radius)..=(col + radius).min(self.width - 1) {
                 if (i as i32 - row as i32).pow(2) + (j as i32 - col as i32).pow(2) <= radius2 as i32
                 {
-                    // Skip the given center coordinate
-                    if i == row && j == col {
-                        continue;
-                    }
-
                     if let Some(entity) = self.get(i, j) {
+                        // If the entity is on a hill (i.e. an ant on a hill), include the hill in the field of vision
+                        if let Some(hill) = entity.on_ant_hill() {
+                            fov.push((hill.as_ref(), i, j));
+                        }
+
+                        // Skip the actual entity if it's the given center coordinate
+                        if i == row && j == col {
+                            continue;
+                        }
+
+                        // Add the entity to the field of vision
                         fov.push((entity.as_ref(), i, j));
                     }
                 }
@@ -618,27 +624,54 @@ mod tests {
         let map = "\
             rows 5
             cols 5
-            players 1
+            players 2
             m ..*..
-            m .0*%.
-            m .*a.%
+            m ..*%.
+            m .*A.%
             m .1...
             m ..*..";
         let map = Map::parse(map);
 
+        // Get the field of vision of the ant at (2, 2), on top of its own hill, with a radius of 2
         let fov = map.field_of_vision((2, 2), 4);
 
         assert_eq!(fov.len(), 8);
-        assert_eq!(map.get(0, 2).unwrap().name(), "Food");
-        assert_eq!(map.get(1, 1).unwrap().name(), "Hill");
-        assert_eq!(map.get(1, 1).unwrap().player().unwrap(), 0);
-        assert_eq!(map.get(1, 2).unwrap().name(), "Food");
-        assert_eq!(map.get(1, 3).unwrap().name(), "Water");
-        assert_eq!(map.get(2, 1).unwrap().name(), "Food");
-        assert_eq!(map.get(2, 4).unwrap().name(), "Water");
-        assert_eq!(map.get(3, 1).unwrap().name(), "Hill");
-        assert_eq!(map.get(3, 1).unwrap().player().unwrap(), 1);
-        assert_eq!(map.get(4, 2).unwrap().name(), "Food");
+
+        assert_eq!(fov[0].0.name(), "Food");
+        assert_eq!(fov[0].1, 0);
+        assert_eq!(fov[0].2, 2);
+
+        assert_eq!(fov[1].0.name(), "Food");
+        assert_eq!(fov[1].1, 1);
+        assert_eq!(fov[1].2, 2);
+
+        assert_eq!(fov[2].0.name(), "Water");
+        assert_eq!(fov[2].1, 1);
+        assert_eq!(fov[2].2, 3);
+
+        assert_eq!(fov[3].0.name(), "Food");
+        assert_eq!(fov[3].1, 2);
+        assert_eq!(fov[3].2, 1);
+
+        // The ant is on its own hill which should be included in the field of vision
+        // The ant itself should not be included in the field of vision because it's the center
+        assert_eq!(fov[4].0.name(), "Hill");
+        assert_eq!(fov[4].0.player().unwrap(), 0);
+        assert_eq!(fov[4].1, 2);
+        assert_eq!(fov[4].2, 2);
+
+        assert_eq!(fov[5].0.name(), "Water");
+        assert_eq!(fov[5].1, 2);
+        assert_eq!(fov[5].2, 4);
+
+        assert_eq!(fov[6].0.name(), "Hill");
+        assert_eq!(fov[6].0.player().unwrap(), 1);
+        assert_eq!(fov[6].1, 3);
+        assert_eq!(fov[6].2, 1);
+
+        assert_eq!(fov[7].0.name(), "Food");
+        assert_eq!(fov[7].1, 4);
+        assert_eq!(fov[7].2, 2);
     }
 
     #[test]
