@@ -1,10 +1,9 @@
-use crate::entities::Ant;
-use crate::entities::Entity;
-use crate::entities::Food;
-use crate::entities::Hill;
+use crate::entities::{Ant, Entity, Food, Hill};
 use crate::map::Map;
+use rand::distributions::{Distribution, Standard};
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
+use rand::Rng;
 use rand::SeedableRng;
 use std::collections::{HashMap, HashSet};
 
@@ -34,15 +33,15 @@ pub struct Game {
 /// Represents the state of the game.
 pub struct GameState {
     /// The current turn.
-    turn: usize,
+    pub turn: usize,
     /// The scores for each player where the index is the player number.
-    scores: Vec<usize>,
+    pub scores: Vec<usize>,
     /// The ants for each player where the index is the player number.
-    ants: Vec<Vec<PlayerAnt>>,
+    pub ants: Vec<Vec<PlayerAnt>>,
     /// Whether the game has finished.
-    finished: bool,
+    pub finished: bool,
     /// The reason the game finished. None if the game has not finished.
-    finished_reason: Option<FinishedReason>,
+    pub finished_reason: Option<FinishedReason>,
 }
 
 /// Represents the direction an ant can move.
@@ -51,6 +50,17 @@ pub enum Direction {
     East,
     South,
     West,
+}
+
+impl Distribution<Direction> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Direction {
+        match rng.gen_range(0..4) {
+            0 => Direction::North,
+            1 => Direction::East,
+            2 => Direction::South,
+            _ => Direction::West,
+        }
+    }
 }
 
 /// Represents the reason the game finished.
@@ -93,22 +103,22 @@ impl Action {
 }
 
 #[derive(Clone)]
-struct StateEntity {
-    name: String,
-    row: usize,
-    col: usize,
-    player: Option<usize>,
-    alive: Option<bool>,
+pub struct StateEntity {
+    pub name: String,
+    pub row: usize,
+    pub col: usize,
+    pub player: Option<usize>,
+    pub alive: Option<bool>,
 }
 
 #[derive(Clone)]
-struct PlayerAnt {
-    id: String,
-    row: usize,
-    col: usize,
-    player: usize,
-    alive: bool,
-    field_of_vision: Vec<StateEntity>,
+pub struct PlayerAnt {
+    pub id: String,
+    pub row: usize,
+    pub col: usize,
+    pub player: usize,
+    pub alive: bool,
+    pub field_of_vision: Vec<StateEntity>,
 }
 
 impl Game {
@@ -152,7 +162,6 @@ impl Game {
             points_for_razing_hill: 2,
             points_for_losing_hill: 1,
             max_turns,
-            // Initialize the `rng` with a seed of 0
             rng: StdRng::seed_from_u64(seed),
         }
     }
@@ -309,7 +318,16 @@ impl Game {
             .collect::<Vec<(usize, usize)>>();
 
         for (row, col) in dead_ants {
-            self.map.remove(row, col);
+            // If the ant was on a hill, replace the location with the hill, otherwise remove the ant
+            if let Some(hill) = self.map.get(row, col).unwrap().on_ant_hill() {
+                self.map.set(
+                    row,
+                    col,
+                    Box::new(Hill::new(hill.player().unwrap(), hill.alive().unwrap())),
+                );
+            } else {
+                self.map.remove(row, col);
+            }
         }
     }
 
@@ -855,6 +873,53 @@ mod tests {
         game.remove_dead_ants();
 
         assert!(game.map.get(1, 0).is_some());
+    }
+
+    #[test]
+    fn when_removing_dead_ants_if_a_dead_ant_is_on_a_hill_the_hill_is_restored() {
+        let map = "\
+            rows 2
+            cols 2
+            players 1
+            m A.
+            m ..";
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+
+        assert_eq!(game.map.get(0, 0).unwrap().name(), "Ant");
+        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
+
+        game.map.get_mut(0, 0).unwrap().set_alive(false);
+
+        game.remove_dead_ants();
+
+        assert_eq!(game.map.get(0, 0).unwrap().name(), "Hill");
+        assert_eq!(game.map.get(0, 0).unwrap().player().unwrap(), 0);
+    }
+
+    #[test]
+    fn when_removing_dead_ants_if_a_dead_ant_is_on_enemy_hill_the_hill_is_restored() {
+        let map = "\
+            rows 2
+            cols 2
+            players 2
+            m 0.
+            m b.";
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+
+        // Move the ant to the enemy hill
+        game.map.move_entity((1, 0), (0, 0));
+
+        assert_eq!(game.map.get(0, 0).unwrap().name(), "Ant");
+        assert_eq!(game.map.get(0, 0).unwrap().player().unwrap(), 1);
+        assert!(game.map.get(0, 0).unwrap().alive().unwrap());
+
+        game.map.get_mut(0, 0).unwrap().set_alive(false);
+
+        game.remove_dead_ants();
+
+        assert_eq!(game.map.get(0, 0).unwrap().name(), "Hill");
+        // The hill should be restored to the original owner
+        assert_eq!(game.map.get(0, 0).unwrap().player().unwrap(), 0);
     }
 
     #[test]
