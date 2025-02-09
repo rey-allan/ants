@@ -352,8 +352,11 @@ impl Map {
         }
 
         if let Some(to) = self.get(to.0, to.1) {
-            // Water or food blocks ants
-            if to.name() == "Water" || to.name() == "Food" {
+            // Water, food or a dead ant blocks the movement
+            if to.name() == "Water"
+                || to.name() == "Food"
+                || (to.name() == "Ant" && !to.alive().unwrap())
+            {
                 return false;
             }
         }
@@ -862,6 +865,26 @@ mod tests {
         map.move_entity((1, 1), (2, 1));
 
         assert!(!map.get(1, 1).unwrap().alive().unwrap());
+        assert!(!map.get(2, 1).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_moving_an_ant_to_a_cell_with_another_dead_ant_movement_is_ignored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a.
+            m .a.";
+        let mut map = Map::parse(map);
+        map.get_mut(2, 1).unwrap().set_alive(false);
+        map.move_entity((1, 1), (2, 1));
+
+        assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
+        assert!(map.get(1, 1).unwrap().alive().unwrap());
+
+        assert_eq!(map.get(2, 1).unwrap().name(), "Ant");
         assert!(!map.get(2, 1).unwrap().alive().unwrap());
     }
 }
