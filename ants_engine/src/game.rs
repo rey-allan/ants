@@ -252,9 +252,17 @@ impl Game {
     }
 
     fn spawn_food_randomly(&mut self) {
+        // Make sure to only spawn food if there is less food than the food per turn
+        let current_food = self.map.food().len();
+
+        if current_food >= self.food_per_turn {
+            return;
+        }
+
+        let food_to_spawn = self.food_per_turn - current_food;
         let land = self.map.land();
         let food_locations = land
-            .choose_multiple(&mut self.rng, self.food_per_turn)
+            .choose_multiple(&mut self.rng, food_to_spawn)
             .cloned()
             .collect();
 
@@ -1438,6 +1446,41 @@ mod tests {
 
         game.spawn_food_randomly();
         assert!(game.map.food().is_empty());
+    }
+
+    #[test]
+    fn when_spawning_food_randomly_and_there_is_enough_current_food_no_more_food_is_spawned() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m *..
+            m .a.
+            m ...";
+        // If we use a `food_rate` of 1, we will only spawn 1 food per turn
+        // and since the map already has 1 food, we should not spawn any more
+        let mut game = Game::new(map, 4, 5, 1, 1, 1500, 0);
+
+        game.spawn_food_randomly();
+        assert_eq!(game.map.food().len(), 1);
+    }
+
+    #[test]
+    fn when_spawning_food_randomly_and_there_is_some_food_already_only_the_missing_food_is_spawned()
+    {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m *..
+            m .a.
+            m ...";
+        // If we use a `food_rate` of 2, we will spawn 2 food per turn
+        // and since the map already has 1 food, we should spawn 1 more
+        let mut game = Game::new(map, 4, 5, 1, 2, 1500, 0);
+
+        game.spawn_food_randomly();
+        assert_eq!(game.map.food().len(), 2);
     }
 
     #[test]
