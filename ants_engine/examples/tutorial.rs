@@ -1,23 +1,65 @@
-use ants_engine::Game;
+use ants_engine::{Action, Direction, Game};
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use std::fs;
 use std::path::Path;
 use std::thread::sleep;
 
+struct RandomAgent {
+    rng: StdRng,
+}
+
+impl RandomAgent {
+    fn new(seed: u64) -> RandomAgent {
+        Self {
+            rng: StdRng::seed_from_u64(seed),
+        }
+    }
+
+    fn act(&mut self, row: usize, col: usize) -> Action {
+        let direction: Direction = self.rng.gen();
+        Action::new(row, col, direction)
+    }
+}
+
 fn main() {
-    let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/example.map");
+    let map_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/maps/tutorial.map");
     let map_contents = match fs::read_to_string(map_file) {
         Ok(contents) => contents,
         Err(e) => panic!("Error reading map file: {}", e),
     };
 
     let mut game = Game::new(&map_contents, 4, 5, 1, 5, 1500, 0);
+    let mut player1 = RandomAgent::new(0);
+    let mut player2 = RandomAgent::new(1);
 
-    game.start();
+    let mut state = game.start();
+    while !state.finished {
+        game.draw();
+        // Wait for 1 second for visualization
+        sleep(std::time::Duration::from_secs(1));
+
+        // Generate random actions for each ant belonging to each player
+        let mut actions = vec![];
+        for (player, ants) in state.ants.iter().enumerate() {
+            for ant in ants {
+                let action = match player {
+                    0 => player1.act(ant.row, ant.col),
+                    1 => player2.act(ant.row, ant.col),
+                    _ => panic!("Invalid player number"),
+                };
+                actions.push(action);
+            }
+        }
+
+        // Update the game state with the generated actions
+        state = game.update(actions);
+    }
+
+    // Do a final draw to show the final state of the game
     game.draw();
-
-    // Wait for 1 second for visualization
-    sleep(std::time::Duration::from_secs(1));
-
-    game.update(vec![]);
-    game.draw();
+    println!(
+        "\n\nGame finished due to: {:?}",
+        state.finished_reason.unwrap()
+    );
 }
