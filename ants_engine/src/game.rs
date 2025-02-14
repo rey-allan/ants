@@ -1,5 +1,6 @@
 use crate::entities::{Ant, Entity, Food, Hill};
 use crate::map::Map;
+use crate::replay::{create_replay_logger, ReplayLogger};
 use rand::distributions::{Distribution, Standard};
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -27,6 +28,7 @@ pub struct Game {
     points_for_razing_hill: usize,
     points_for_losing_hill: usize,
     max_turns: usize,
+    replay_logger: Box<dyn ReplayLogger>,
     rng: StdRng,
 }
 
@@ -132,6 +134,7 @@ impl Game {
     /// * `food_rate` - The amount of food to spawn *per player* on each round.
     /// * `max_turns` - The maximum number of turns before the game ends.
     /// * `seed` - The seed for the random number generator.
+    /// * `replay_filename` - The filename to save the replay of the game to. If `None`, no replay will be saved.
     pub fn new(
         map_contents: &str,
         fov_radius2: usize,
@@ -140,9 +143,12 @@ impl Game {
         food_rate: usize,
         max_turns: usize,
         seed: u64,
+        replay_filename: Option<String>,
     ) -> Game {
         let map = Map::parse(map_contents);
         let players = map.players();
+        let width = map.width();
+        let height = map.height();
 
         Game {
             map,
@@ -162,6 +168,13 @@ impl Game {
             points_for_razing_hill: 2,
             points_for_losing_hill: 1,
             max_turns,
+            replay_logger: create_replay_logger(
+                replay_filename,
+                players,
+                width,
+                height,
+                map_contents.to_string(),
+            ),
             rng: StdRng::seed_from_u64(seed),
         }
     }
@@ -175,10 +188,18 @@ impl Game {
         self.turns_with_too_much_food = 0;
         self.hive = vec![0; self.map.players()];
         self.map = Map::parse(&self.map_contents);
+        self.replay_logger.clear();
 
         self.compute_initial_scores();
         self.spawn_food_around_hills();
         self.spawn_ants_all_hills();
+
+        self.replay_logger.log_turn(
+            self.turn,
+            self.live_ants_per_player_count(),
+            self.hive.clone(),
+            self.scores.clone(),
+        );
 
         // Compute the intial game state
         self.game_state()
@@ -209,17 +230,25 @@ impl Game {
         self.spawn_food_randomly();
 
         self.check_for_endgame();
+
+        self.replay_logger.log_turn(
+            self.turn,
+            self.live_ants_per_player_count(),
+            self.hive.clone(),
+            self.scores.clone(),
+        );
+
+        // If the game finished, save the replay
+        if self.finished {
+            self.replay_logger.save();
+        }
+
         self.game_state()
     }
 
     /// Draws the game to the console.
     pub fn draw(&self) {
-        let ants = self
-            .live_ants_per_player()
-            .iter()
-            .map(|ants| ants.len())
-            .collect::<Vec<usize>>();
-
+        let ants = self.live_ants_per_player_count();
         self.map.draw(self.turn, &self.scores, &ants, &self.hive);
     }
 
@@ -483,6 +512,13 @@ impl Game {
             })
     }
 
+    fn live_ants_per_player_count(&self) -> Vec<usize> {
+        self.live_ants_per_player()
+            .iter()
+            .map(|ants| ants.len())
+            .collect::<Vec<usize>>()
+    }
+
     fn live_ants(&self) -> Vec<(&dyn Entity, usize, usize)> {
         self.map
             .ants()
@@ -666,7 +702,7 @@ mod tests {
             m %..%
             m %..%
             m %.0%";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
 
         game.map.set(0, 0, Box::new(Food));
         game.start();
@@ -684,7 +720,7 @@ mod tests {
             m %..%
             m %..%
             m %.0%";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
 
         game.start();
 
@@ -711,7 +747,7 @@ mod tests {
             m %..%
             m %..%
             m %.0%";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
 
         game.start();
 
@@ -738,7 +774,7 @@ mod tests {
             m %..%
             m %..%
             m %.0%";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
 
         let state = game.start();
 
@@ -808,7 +844,7 @@ mod tests {
             m %1.%
             m %..%
             m %00%";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
 
         game.start();
 
@@ -826,7 +862,7 @@ mod tests {
             m %..%
             m %..%
             m %.0%";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
         game.update(vec![]);
     }
 
@@ -841,7 +877,7 @@ mod tests {
             m %..%
             m %..%
             m %.0%";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
         game.started = true;
         game.finished = true;
 
@@ -856,7 +892,7 @@ mod tests {
             players 1
             m 0.
             m a.";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
 
         assert!(game.map.get(1, 0).unwrap().alive().unwrap());
         game.map.get_mut(1, 0).unwrap().set_alive(false);
@@ -874,7 +910,7 @@ mod tests {
             players 1
             m 0.
             m a.";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
 
         assert!(game.map.get(1, 0).unwrap().alive().unwrap());
 
@@ -891,7 +927,7 @@ mod tests {
             players 1
             m A.
             m ..";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
 
         assert_eq!(game.map.get(0, 0).unwrap().name(), "Ant");
         assert!(game.map.get(0, 0).unwrap().alive().unwrap());
@@ -912,7 +948,7 @@ mod tests {
             players 2
             m 0.
             m b.";
-        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 4, 1, 5, 1500, 0, None);
 
         // Move the ant to the enemy hill
         game.map.move_entity((1, 0), (0, 0));
@@ -939,7 +975,7 @@ mod tests {
             m .....
             m .a.b.
             m .....";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         assert!(game.map.get(1, 1).unwrap().alive().unwrap());
         assert!(game.map.get(1, 3).unwrap().alive().unwrap());
@@ -959,7 +995,7 @@ mod tests {
             m ...b.
             m .a...
             m ...b.";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         assert!(game.map.get(0, 3).unwrap().alive().unwrap());
         assert!(game.map.get(1, 1).unwrap().alive().unwrap());
@@ -981,7 +1017,7 @@ mod tests {
             m ...b.
             m .a...
             m ...c.";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         assert!(game.map.get(0, 3).unwrap().alive().unwrap());
         assert!(game.map.get(1, 1).unwrap().alive().unwrap());
@@ -1003,7 +1039,7 @@ mod tests {
             m .....
             m a.b.c
             m .....";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         assert!(game.map.get(1, 0).unwrap().alive().unwrap());
         assert!(game.map.get(1, 2).unwrap().alive().unwrap());
@@ -1025,7 +1061,7 @@ mod tests {
             m ...b.
             m .a.a.
             m ...c.";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         assert!(game.map.get(0, 3).unwrap().alive().unwrap());
         assert!(game.map.get(1, 1).unwrap().alive().unwrap());
@@ -1049,7 +1085,7 @@ mod tests {
             m aaaaaaaaa
             m ...bbb...
             m ...bbb...";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         assert!(game.map.get(0, 0).unwrap().alive().unwrap());
         assert!(game.map.get(0, 1).unwrap().alive().unwrap());
@@ -1095,7 +1131,7 @@ mod tests {
             players 1
             m 0.
             m ..";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.compute_initial_scores();
 
         assert_eq!(game.scores, vec![1]);
@@ -1116,7 +1152,7 @@ mod tests {
             players 1
             m 0.
             m a.";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.compute_initial_scores();
 
         assert_eq!(game.scores, vec![1]);
@@ -1142,7 +1178,7 @@ mod tests {
             players 2
             m 0.
             m b1";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.compute_initial_scores();
 
         assert_eq!(game.scores, vec![1, 1]);
@@ -1179,7 +1215,7 @@ mod tests {
             players 2
             m 0.
             m b1";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.compute_initial_scores();
 
         assert_eq!(game.scores, vec![1, 1]);
@@ -1214,7 +1250,7 @@ mod tests {
             players 2
             m 01
             m ..";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         game.spawn_ants_from_hive();
 
@@ -1231,7 +1267,7 @@ mod tests {
             players 1
             m 0.
             m ..";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.hive = vec![1];
 
         // Raze the hill
@@ -1251,7 +1287,7 @@ mod tests {
             players 2
             m 01
             m ..";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.hive = vec![1, 1];
 
         game.spawn_ants_from_hive();
@@ -1271,7 +1307,7 @@ mod tests {
             players 1
             m 0.
             m ..";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.hive = vec![5];
 
         game.spawn_ants_from_hive();
@@ -1289,7 +1325,7 @@ mod tests {
             players 1
             m 0.
             m .0";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.hive = vec![1];
 
         game.spawn_ants_from_hive();
@@ -1309,7 +1345,7 @@ mod tests {
             players 2
             m 01
             m 10";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.hive = vec![5, 2];
 
         game.spawn_ants_from_hive();
@@ -1336,7 +1372,7 @@ mod tests {
             m *..
             m .*.
             m ..*";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         game.harvest_food();
 
@@ -1356,7 +1392,7 @@ mod tests {
             m *ab
             m .aa
             m b.*";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         game.harvest_food();
 
@@ -1375,7 +1411,7 @@ mod tests {
             m *a.
             m b.a
             m .b*";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         game.harvest_food();
 
@@ -1393,7 +1429,7 @@ mod tests {
             m ...
             m .a.
             m ...";
-        let mut game = Game::new(map, 4, 5, 1, 8, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 8, 1500, 0, None);
 
         game.spawn_food_randomly();
 
@@ -1422,7 +1458,7 @@ mod tests {
             m aa.
             m .a.
             m b.b";
-        let mut game = Game::new(map, 4, 5, 1, 9, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 9, 1500, 0, None);
 
         game.spawn_food_randomly();
 
@@ -1442,7 +1478,7 @@ mod tests {
             m aaa
             m aaa
             m aba";
-        let mut game = Game::new(map, 4, 5, 1, 9, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 9, 1500, 0, None);
 
         game.spawn_food_randomly();
         assert!(game.map.food().is_empty());
@@ -1459,7 +1495,7 @@ mod tests {
             m ...";
         // If we use a `food_rate` of 1, we will only spawn 1 food per turn
         // and since the map already has 1 food, we should not spawn any more
-        let mut game = Game::new(map, 4, 5, 1, 1, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 1, 1500, 0, None);
 
         game.spawn_food_randomly();
         assert_eq!(game.map.food().len(), 1);
@@ -1477,7 +1513,7 @@ mod tests {
             m ...";
         // If we use a `food_rate` of 2, we will spawn 2 food per turn
         // and since the map already has 1 food, we should spawn 1 more
-        let mut game = Game::new(map, 4, 5, 1, 2, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 2, 1500, 0, None);
 
         game.spawn_food_randomly();
         assert_eq!(game.map.food().len(), 2);
@@ -1492,7 +1528,7 @@ mod tests {
             m *a*
             m ***
             m .**";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.cutoff_threshold = 1;
 
         game.check_for_endgame();
@@ -1510,7 +1546,7 @@ mod tests {
             m a..
             m aa.
             m ...";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
 
         game.check_for_endgame();
 
@@ -1528,7 +1564,7 @@ mod tests {
             m 0..
             m ...
             m ..1";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.compute_initial_scores();
 
         game.check_for_endgame();
@@ -1549,7 +1585,7 @@ mod tests {
             m 0..
             m ...
             m .3.";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         // If player 0 razes the hills of player 1 and 2, the scores are 0=5, 1=0, 2=0, 3=1
         // In this case, even if player 3 were to raze the hill of player 0, the score would be 0=4, 1=0, 2=0, 3=3
         // so player 3 can't possibly do better than 2nd place and the game ends
@@ -1573,7 +1609,7 @@ mod tests {
             m 0..
             m .2.
             m .3.";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         // If player 0 razes the hills of player 1, the scores are 0=3, 1=0, 2=1, 3=1
         // In this case, if player 2 were to raze all the other hills, the score would be 0=2, 1=0, 2=3, 3=0
         // and player 2 would win, so the rank is not stabilized yet.
@@ -1597,7 +1633,7 @@ mod tests {
             m 0..
             m ...
             m ..1";
-        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0);
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
         game.turn = 1500;
 
         game.check_for_endgame();

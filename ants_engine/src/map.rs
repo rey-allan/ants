@@ -73,6 +73,14 @@ impl Map {
         self.grid[row * self.width + col] = None;
     }
 
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
     pub fn players(&self) -> usize {
         self.players
     }
