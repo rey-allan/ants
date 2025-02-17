@@ -25,11 +25,22 @@ pub trait ReplayLogger {
     fn log_turn(&mut self, turn: usize, ants: Vec<usize>, hive: Vec<usize>, scores: Vec<usize>) {}
 
     fn log_spawn_ant(&mut self, turn: usize, player: usize, location: (usize, usize)) {
-        self.log_spawn(turn, "Ant".to_string(), player, location);
+        self.log_spawn(turn, "Ant".to_string(), Some(player), location);
+    }
+
+    fn log_spawn_food(&mut self, turn: usize, location: (usize, usize)) {
+        self.log_spawn(turn, "Food".to_string(), None, location);
     }
 
     #[allow(unused_variables)]
-    fn log_spawn(&mut self, turn: usize, entity: String, player: usize, location: (usize, usize)) {}
+    fn log_spawn(
+        &mut self,
+        turn: usize,
+        entity: String,
+        player: Option<usize>,
+        location: (usize, usize),
+    ) {
+    }
 
     fn clear(&mut self) {}
 
@@ -49,7 +60,7 @@ enum EventType {
 struct Event {
     event_type: EventType,
     entity: String,
-    player: usize,
+    player: Option<usize>,
     location: (usize, usize),
     destination: Option<(usize, usize)>,
 }
@@ -104,7 +115,13 @@ impl ReplayLogger for JsonReplayLogger {
         });
     }
 
-    fn log_spawn(&mut self, turn: usize, entity: String, player: usize, location: (usize, usize)) {
+    fn log_spawn(
+        &mut self,
+        turn: usize,
+        entity: String,
+        player: Option<usize>,
+        location: (usize, usize),
+    ) {
         self.events.entry(turn).or_default().push(Event {
             event_type: EventType::Spawn,
             entity,

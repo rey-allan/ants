@@ -301,6 +301,7 @@ impl Game {
     fn spawn_food(&mut self, locations: Vec<(usize, usize)>) {
         for (row, col) in locations {
             self.map.set(row, col, Box::new(Food));
+            self.replay_logger.log_spawn_food(self.turn, (row, col));
         }
     }
 
