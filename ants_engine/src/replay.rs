@@ -24,6 +24,13 @@ pub trait ReplayLogger {
     #[allow(unused_variables)]
     fn log_turn(&mut self, turn: usize, ants: Vec<usize>, hive: Vec<usize>, scores: Vec<usize>) {}
 
+    #[allow(unused_variables)]
+    fn log_event(&mut self, turn: usize, event: Event) {}
+
+    fn clear(&mut self) {}
+
+    fn save(&self) {}
+
     fn log_spawn_ant(&mut self, turn: usize, player: usize, location: (usize, usize)) {
         self.log_spawn(turn, "Ant".to_string(), Some(player), location);
     }
@@ -32,7 +39,10 @@ pub trait ReplayLogger {
         self.log_spawn(turn, "Food".to_string(), None, location);
     }
 
-    #[allow(unused_variables)]
+    fn log_kill_ant(&mut self, turn: usize, location: (usize, usize)) {
+        self.log_kill(turn, "Ant".to_string(), location);
+    }
+
     fn log_spawn(
         &mut self,
         turn: usize,
@@ -40,11 +50,30 @@ pub trait ReplayLogger {
         player: Option<usize>,
         location: (usize, usize),
     ) {
+        self.log_event(
+            turn,
+            Event {
+                event_type: EventType::Spawn,
+                entity,
+                player,
+                location,
+                destination: None,
+            },
+        );
     }
 
-    fn clear(&mut self) {}
-
-    fn save(&self) {}
+    fn log_kill(&mut self, turn: usize, entity: String, location: (usize, usize)) {
+        self.log_event(
+            turn,
+            Event {
+                event_type: EventType::Kill,
+                entity,
+                player: None,
+                location,
+                destination: None,
+            },
+        );
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -57,7 +86,7 @@ enum EventType {
 }
 
 #[derive(serde::Serialize)]
-struct Event {
+pub struct Event {
     event_type: EventType,
     entity: String,
     player: Option<usize>,
@@ -115,20 +144,8 @@ impl ReplayLogger for JsonReplayLogger {
         });
     }
 
-    fn log_spawn(
-        &mut self,
-        turn: usize,
-        entity: String,
-        player: Option<usize>,
-        location: (usize, usize),
-    ) {
-        self.events.entry(turn).or_default().push(Event {
-            event_type: EventType::Spawn,
-            entity,
-            player,
-            location,
-            destination: None,
-        });
+    fn log_event(&mut self, turn: usize, event: Event) {
+        self.events.entry(turn).or_default().push(event);
     }
 
     fn clear(&mut self) {

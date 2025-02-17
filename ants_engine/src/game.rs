@@ -368,6 +368,8 @@ impl Game {
             } else {
                 self.map.remove(row, col);
             }
+
+            self.replay_logger.log_kill_ant(self.turn, (row, col));
         }
     }
 
