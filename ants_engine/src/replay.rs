@@ -56,6 +56,10 @@ pub trait ReplayLogger {
         );
     }
 
+    fn log_remove_hill(&mut self, turn: usize, location: (usize, usize)) {
+        self.log_remove(turn, "Hill".to_string(), location);
+    }
+
     fn log_spawn(
         &mut self,
         turn: usize,

@@ -459,6 +459,7 @@ impl Game {
                 .get_mut(row, col)
                 .unwrap()
                 .set_on_ant_hill(Box::new(Hill::new(hill_owner, false)));
+            self.replay_logger.log_remove_hill(self.turn, (row, col));
         }
     }
 
