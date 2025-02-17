@@ -60,6 +60,10 @@ pub trait ReplayLogger {
         self.log_remove(turn, "Hill".to_string(), location);
     }
 
+    fn log_remove_food(&mut self, turn: usize, location: (usize, usize)) {
+        self.log_remove(turn, "Food".to_string(), location);
+    }
+
     fn log_spawn(
         &mut self,
         turn: usize,
@@ -99,7 +103,6 @@ enum EventType {
     Remove,
     Move,
     Attack,
-    Havest,
 }
 
 #[derive(serde::Serialize)]

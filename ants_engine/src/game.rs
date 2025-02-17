@@ -480,12 +480,14 @@ impl Game {
             }
 
             // If there is only one player around the food, they consume it into their hive
+            // Otherwise, it's simply removed from the map without being consumed by anyone
             if unique_player_ants_around_food.len() == 1 {
                 let player = unique_player_ants_around_food.iter().next().unwrap();
                 self.hive[*player] += 1;
             }
 
             self.map.remove(row, col);
+            self.replay_logger.log_remove_food(self.turn, (row, col));
         }
     }
 
