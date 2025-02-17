@@ -43,6 +43,19 @@ pub trait ReplayLogger {
         self.log_kill(turn, "Ant".to_string(), location);
     }
 
+    fn log_move_ant(&mut self, turn: usize, location: (usize, usize), destination: (usize, usize)) {
+        self.log_event(
+            turn,
+            Event {
+                event_type: EventType::Move,
+                entity: "Ant".to_string(),
+                player: None,
+                location,
+                destination: Some(destination),
+            },
+        );
+    }
+
     fn log_spawn(
         &mut self,
         turn: usize,

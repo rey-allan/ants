@@ -384,6 +384,8 @@ impl Game {
 
             self.map
                 .move_entity((action.row, action.col), (to_row, to_col));
+            self.replay_logger
+                .log_move_ant(self.turn, (action.row, action.col), (to_row, to_col));
         }
     }
 
