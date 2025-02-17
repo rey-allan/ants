@@ -21,14 +21,15 @@ pub fn create_replay_logger(
 }
 
 pub trait ReplayLogger {
-    fn log_turn(
-        &mut self,
-        _turn: usize,
-        _ants: Vec<usize>,
-        _hive: Vec<usize>,
-        _scores: Vec<usize>,
-    ) {
+    #[allow(unused_variables)]
+    fn log_turn(&mut self, turn: usize, ants: Vec<usize>, hive: Vec<usize>, scores: Vec<usize>) {}
+
+    fn log_spawn_ant(&mut self, turn: usize, player: usize, location: (usize, usize)) {
+        self.log_spawn(turn, "Ant".to_string(), player, location);
     }
+
+    #[allow(unused_variables)]
+    fn log_spawn(&mut self, turn: usize, entity: String, player: usize, location: (usize, usize)) {}
 
     fn clear(&mut self) {}
 
@@ -100,6 +101,16 @@ impl ReplayLogger for JsonReplayLogger {
             ants,
             hive,
             scores,
+        });
+    }
+
+    fn log_spawn(&mut self, turn: usize, entity: String, player: usize, location: (usize, usize)) {
+        self.events.entry(turn).or_default().push(Event {
+            event_type: EventType::Spawn,
+            entity,
+            player,
+            location,
+            destination: None,
         });
     }
 

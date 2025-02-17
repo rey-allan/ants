@@ -19,13 +19,15 @@ pub trait Entity {
         None
     }
 
-    fn set_alive(&mut self, _value: bool) {}
+    #[allow(unused_variables)]
+    fn set_alive(&mut self, value: bool) {}
 
     fn on_ant_hill(&self) -> Option<&Box<dyn Entity>> {
         None
     }
 
-    fn set_on_ant_hill(&mut self, _value: Box<dyn Entity>) {}
+    #[allow(unused_variables)]
+    fn set_on_ant_hill(&mut self, value: Box<dyn Entity>) {}
 
     fn char(&self) -> char {
         '!'

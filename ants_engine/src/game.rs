@@ -342,6 +342,8 @@ impl Game {
                     Box::new(Hill::new(player, true)),
                 )),
             );
+            self.replay_logger
+                .log_spawn_ant(self.turn, player, (row, col));
         }
     }
 
