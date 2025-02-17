@@ -39,8 +39,8 @@ pub trait ReplayLogger {
         self.log_spawn(turn, "Food".to_string(), None, location);
     }
 
-    fn log_kill_ant(&mut self, turn: usize, location: (usize, usize)) {
-        self.log_kill(turn, "Ant".to_string(), location);
+    fn log_remove_ant(&mut self, turn: usize, location: (usize, usize)) {
+        self.log_remove(turn, "Ant".to_string(), location);
     }
 
     fn log_move_ant(&mut self, turn: usize, location: (usize, usize), destination: (usize, usize)) {
@@ -75,11 +75,11 @@ pub trait ReplayLogger {
         );
     }
 
-    fn log_kill(&mut self, turn: usize, entity: String, location: (usize, usize)) {
+    fn log_remove(&mut self, turn: usize, entity: String, location: (usize, usize)) {
         self.log_event(
             turn,
             Event {
-                event_type: EventType::Kill,
+                event_type: EventType::Remove,
                 entity,
                 player: None,
                 location,
@@ -92,7 +92,7 @@ pub trait ReplayLogger {
 #[derive(serde::Serialize)]
 enum EventType {
     Spawn,
-    Kill,
+    Remove,
     Move,
     Attack,
     Havest,
