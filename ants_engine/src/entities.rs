@@ -51,7 +51,7 @@ impl Ant {
         player: usize,
         alive: bool,
         on_ant_hill: Option<Box<dyn Entity>>,
-    ) -> Self {
+    ) -> Ant {
         Ant {
             id,
             player,
@@ -60,7 +60,7 @@ impl Ant {
         }
     }
 
-    pub fn from_ant_hill(player: usize, ant_hill: Box<dyn Entity>) -> Self {
+    pub fn from_ant_hill(player: usize, ant_hill: Box<dyn Entity>) -> Ant {
         Ant {
             id: Uuid::new_v4().to_string(),
             player,
@@ -132,7 +132,7 @@ pub struct Hill {
 }
 
 impl Hill {
-    pub fn new(player: usize, alive: bool) -> Self {
+    pub fn new(player: usize, alive: bool) -> Hill {
         Hill { player, alive }
     }
 }

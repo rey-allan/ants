@@ -141,7 +141,7 @@ impl JsonReplayLogger {
         map_width: usize,
         map_height: usize,
         map_contents: String,
-    ) -> Self {
+    ) -> JsonReplayLogger {
         JsonReplayLogger {
             filename,
             players,
