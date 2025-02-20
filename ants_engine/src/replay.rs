@@ -25,6 +25,9 @@ pub trait ReplayLogger {
     fn log_turn(&mut self, turn: usize, ants: Vec<usize>, hive: Vec<usize>, scores: Vec<usize>) {}
 
     #[allow(unused_variables)]
+    fn log_end_game(&mut self, reason: String) {}
+
+    #[allow(unused_variables)]
     fn log_event(&mut self, turn: usize, event: Event) {}
 
     fn clear(&mut self) {}
@@ -132,6 +135,7 @@ struct JsonReplayLogger {
     map_contents: String,
     turns: Vec<Turn>,
     events: HashMap<usize, Vec<Event>>,
+    finished_reason: Option<String>,
 }
 
 impl JsonReplayLogger {
@@ -150,6 +154,7 @@ impl JsonReplayLogger {
             map_contents,
             turns: Vec::new(),
             events: HashMap::new(),
+            finished_reason: None,
         }
     }
 }
@@ -162,6 +167,10 @@ impl ReplayLogger for JsonReplayLogger {
             hive,
             scores,
         });
+    }
+
+    fn log_end_game(&mut self, reason: String) {
+        self.finished_reason = Some(reason);
     }
 
     fn log_event(&mut self, turn: usize, event: Event) {
@@ -197,6 +206,7 @@ impl ReplayLogger for JsonReplayLogger {
                 "contents": self.map_contents,
             },
             "turns": turns,
+            "finished_reason": self.finished_reason,
         });
 
         let mut writer = BufWriter::new(&file);

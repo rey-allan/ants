@@ -238,8 +238,10 @@ impl Game {
             self.scores.clone(),
         );
 
-        // If the game finished, save the replay
+        // If the game finished, log the end game and save the replay
         if self.finished {
+            self.replay_logger
+                .log_end_game(format!("{:?}", self.finished_reason.as_ref().unwrap()));
             self.replay_logger.save();
         }
 
