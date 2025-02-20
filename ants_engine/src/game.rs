@@ -405,6 +405,8 @@ impl Game {
 
         // Determine which ants to kill
         let mut to_kill = Vec::new();
+        let mut attack_logs = Vec::new();
+
         for (ant, row, col) in ants {
             let ant_enemies = enemies.get(ant.id()).unwrap();
             let focus = ant_enemies.len();
@@ -423,12 +425,22 @@ impl Game {
             // Ant dies if its focused on more or equal enemies than its enemy with the most attention power
             if focus >= min_enemy_focus {
                 to_kill.push((row, col));
+
+                // Collect attack log from each enemy to the ant
+                for (_, enemy_row, enemy_col) in ant_enemies {
+                    attack_logs.push(((*enemy_row, *enemy_col), (row, col)));
+                }
             }
         }
 
         // After all battles are resolved, kill the ants
         for (row, col) in to_kill {
             self.map.get_mut(row, col).unwrap().set_alive(false);
+        }
+
+        // Log all attack events
+        for (enemy_pos, ant_pos) in attack_logs {
+            self.replay_logger.log_attack(self.turn, enemy_pos, ant_pos);
         }
     }
 

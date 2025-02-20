@@ -67,6 +67,19 @@ pub trait ReplayLogger {
         self.log_remove(turn, "Food".to_string(), location);
     }
 
+    fn log_attack(&mut self, turn: usize, location: (usize, usize), destination: (usize, usize)) {
+        self.log_event(
+            turn,
+            Event {
+                event_type: EventType::Attack,
+                entity: "Ant".to_string(),
+                player: None,
+                location,
+                destination: Some(destination),
+            },
+        );
+    }
+
     fn log_spawn(
         &mut self,
         turn: usize,
