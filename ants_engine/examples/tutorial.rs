@@ -3,7 +3,6 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::fs;
 use std::path::Path;
-use std::thread::sleep;
 
 struct RandomAgent {
     rng: StdRng,
@@ -37,10 +36,6 @@ fn main() {
 
     let mut state = game.start();
     while !state.finished {
-        game.draw();
-        // Wait for 1 second for visualization
-        sleep(std::time::Duration::from_secs(1));
-
         // Generate random actions for each ant belonging to each player
         let mut actions = vec![];
         for (player, ants) in state.ants.iter().enumerate() {
@@ -58,10 +53,8 @@ fn main() {
         state = game.update(actions);
     }
 
-    // Do a final draw to show the final state of the game
-    game.draw();
     println!(
-        "\n\nGame finished due to: {:?}",
+        "\nGame finished due to: {:?}",
         state.finished_reason.unwrap()
     );
 }
