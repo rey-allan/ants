@@ -42,7 +42,7 @@ pub struct GameState {
     pub ants: Vec<Vec<PlayerAnt>>,
     /// Whether the game has finished.
     pub finished: bool,
-    /// The reason the game finished. None if the game has not finished.
+    /// The reason the game finished. `None` if the game has not finished.
     pub finished_reason: Option<FinishedReason>,
 }
 
@@ -70,7 +70,7 @@ impl Distribution<Direction> for Standard {
 pub enum FinishedReason {
     /// The game ended because there was only one player left.
     LoneSurvivor,
-    /// The game ended because the rank stabilized, i.e. no player can surpass the current leader.
+    /// The game ended because the rank stabilized, i.e. no player can surpass the current leader anymore.
     RankStabilized,
     /// The game ended because food was not being consumed and it reached 90% or more of the map.
     TooMuchFood,
@@ -79,6 +79,7 @@ pub enum FinishedReason {
 }
 
 /// Represents an action an ant can take.
+///
 /// The action is a tuple of the ant's row, column, and direction.
 /// If the direction is not a valid move, the ant will stay in place.
 /// Or if the provided location is not a valid ant, the action will be ignored.
@@ -104,22 +105,35 @@ impl Action {
     }
 }
 
+/// Represents an entity in the game state.
 #[derive(Clone)]
 pub struct StateEntity {
+    /// The name of the entity.
     pub name: String,
+    /// The row of the location of the entity.
     pub row: usize,
+    /// The column of the location of the entity.
     pub col: usize,
+    /// The player who owns the entity, if applicable. For example, food does not belong to a player.
     pub player: Option<usize>,
+    /// Whether the entity is alive, if applicable. For example, food does not have an alive state.
     pub alive: Option<bool>,
 }
 
+/// Represents an ant in the game state.
 #[derive(Clone)]
 pub struct PlayerAnt {
+    /// The unique identifier for the ant.
     pub id: String,
+    /// The row of the location of the ant.
     pub row: usize,
+    /// The column of the location of the ant.
     pub col: usize,
+    /// The player who owns the ant.
     pub player: usize,
+    /// Whether the ant is alive.
     pub alive: bool,
+    /// The field of vision for the ant as a list of entities the ant can see.
     pub field_of_vision: Vec<StateEntity>,
 }
 
@@ -180,6 +194,8 @@ impl Game {
     }
 
     /// Starts the game.
+    ///
+    /// Must be called once before updating the game state.
     pub fn start(&mut self) -> GameState {
         self.turn = 0;
         self.started = true;
@@ -205,7 +221,10 @@ impl Game {
         self.game_state()
     }
 
-    /// Updates the game state based on the actions provided for each ant.
+    /// Updates the game state.
+    ///
+    /// # Arguments
+    /// * `actions` - The actions to take for each ant.
     pub fn update(&mut self, actions: Vec<Action>) -> GameState {
         if !self.started {
             panic!("Game has not started! Call `start` to start the game.");
