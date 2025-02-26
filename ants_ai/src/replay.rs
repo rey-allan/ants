@@ -20,7 +20,7 @@ pub fn create_replay_logger(
     }
 }
 
-pub trait ReplayLogger {
+pub trait ReplayLogger: Send + Sync {
     #[allow(unused_variables)]
     fn log_turn(&mut self, turn: usize, ants: Vec<usize>, hive: Vec<usize>, scores: Vec<usize>) {}
 

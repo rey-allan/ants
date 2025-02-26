@@ -2,7 +2,7 @@ use crossterm::style::Color;
 use std::any::type_name;
 use uuid::Uuid;
 
-pub trait Entity {
+pub trait Entity: Send + Sync {
     fn name(&self) -> &str {
         type_name::<Self>().rsplit("::").next().unwrap()
     }

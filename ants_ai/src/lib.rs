@@ -16,13 +16,12 @@ mod entities;
 mod map;
 mod replay;
 
-// TODO: Replace this with our actual bindings for the `ants_engine` crate
-#[pyfunction]
-fn say_hello() -> String {
-    "Hello, Ants AI from Rust!".to_string()
-}
-
 #[pymodule]
 fn ants_engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(say_hello, m)?)
+    m.add_class::<Action>()?;
+    m.add_class::<Direction>()?;
+    m.add_class::<FinishedReason>()?;
+    m.add_class::<Game>()?;
+    m.add_class::<GameState>()?;
+    Ok(())
 }

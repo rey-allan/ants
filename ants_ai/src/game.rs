@@ -1,6 +1,7 @@
 use crate::entities::{Ant, Entity, Food, Hill};
 use crate::map::Map;
 use crate::replay::{create_replay_logger, ReplayLogger};
+use pyo3::prelude::*;
 use rand::distributions::{Distribution, Standard};
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -10,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 
 /// The Ants game.
 /// Main entry point for running the game.
+#[pyclass]
 pub struct Game {
     map: Map,
     map_contents: String,
@@ -33,6 +35,7 @@ pub struct Game {
 }
 
 /// Represents the state of the game.
+#[pyclass]
 pub struct GameState {
     /// The current turn.
     pub turn: usize,
@@ -47,6 +50,8 @@ pub struct GameState {
 }
 
 /// Represents the direction an ant can move.
+#[derive(Clone, PartialEq)]
+#[pyclass(eq, eq_int)]
 pub enum Direction {
     North,
     East,
@@ -67,6 +72,7 @@ impl Distribution<Direction> for Standard {
 
 /// Represents the reason the game finished.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[pyclass(eq, eq_int)]
 pub enum FinishedReason {
     /// The game ended because there was only one player left.
     LoneSurvivor,
@@ -83,12 +89,15 @@ pub enum FinishedReason {
 /// The action is a tuple of the ant's row, column, and direction.
 /// If the direction is not a valid move, the ant will stay in place.
 /// Or if the provided location is not a valid ant, the action will be ignored.
+#[derive(Clone)]
+#[pyclass]
 pub struct Action {
     row: usize,
     col: usize,
     direction: Direction,
 }
 
+#[pymethods]
 impl Action {
     /// Creates a new action.
     ///
@@ -96,6 +105,7 @@ impl Action {
     /// * `row` - The row of the ant to move.
     /// * `col` - The column of the ant to move.
     /// * `direction` - The direction the ant should move.
+    #[new]
     pub fn new(row: usize, col: usize, direction: Direction) -> Action {
         Action {
             row,
@@ -107,6 +117,7 @@ impl Action {
 
 /// Represents an entity in the game state.
 #[derive(Clone)]
+#[pyclass]
 pub struct StateEntity {
     /// The name of the entity.
     pub name: String,
@@ -122,6 +133,7 @@ pub struct StateEntity {
 
 /// Represents an ant in the game state.
 #[derive(Clone)]
+#[pyclass]
 pub struct PlayerAnt {
     /// The unique identifier for the ant.
     pub id: String,
@@ -137,6 +149,7 @@ pub struct PlayerAnt {
     pub field_of_vision: Vec<StateEntity>,
 }
 
+#[pymethods]
 impl Game {
     /// Creates a new game.
     ///
@@ -149,6 +162,8 @@ impl Game {
     /// * `max_turns` - The maximum number of turns before the game ends.
     /// * `seed` - The seed for the random number generator.
     /// * `replay_filename` - The filename to save the replay of the game to. If `None`, no replay will be saved.
+    #[new]
+    #[pyo3(signature = (map_contents, fov_radius2, attack_radius2, food_radius2, food_rate, max_turns, seed, replay_filename=None))]
     pub fn new(
         map_contents: &str,
         fov_radius2: usize,
@@ -272,7 +287,9 @@ impl Game {
         let ants = self.live_ants_per_player_count();
         self.map.draw(self.turn, &self.scores, &ants, &self.hive);
     }
+}
 
+impl Game {
     fn compute_initial_scores(&mut self) {
         // Each agent starts with 1 point per hill
         let ants_hills_per_player = self.live_ant_hills_per_player();
@@ -544,19 +561,14 @@ impl Game {
             .collect()
     }
 
-    fn live_ants_per_player(&self) -> Vec<Vec<(&dyn Entity, usize, usize)>> {
+    fn live_ants_per_player_count(&self) -> Vec<usize> {
         let players = self.map.players();
         self.live_ants()
             .into_iter()
-            // Group ants by player
-            .fold(vec![vec![]; players], |mut acc, ant| {
-                acc[ant.0.player().unwrap()].push(ant);
+            .fold(vec![vec![]; players], |mut acc, (ant, _, _)| {
+                acc[ant.player().unwrap()].push(ant);
                 acc
             })
-    }
-
-    fn live_ants_per_player_count(&self) -> Vec<usize> {
-        self.live_ants_per_player()
             .iter()
             .map(|ants| ants.len())
             .collect::<Vec<usize>>()
