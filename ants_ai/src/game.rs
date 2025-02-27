@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 
 /// The Ants game.
 /// Main entry point for running the game.
-#[pyclass]
+#[pyclass(module = "ants_engine")]
 pub struct Game {
     map: Map,
     map_contents: String,
@@ -35,7 +35,7 @@ pub struct Game {
 }
 
 /// Represents the state of the game.
-#[pyclass]
+#[pyclass(module = "ants_engine", get_all)]
 pub struct GameState {
     /// The current turn.
     pub turn: usize,
@@ -51,7 +51,7 @@ pub struct GameState {
 
 /// Represents the direction an ant can move.
 #[derive(Clone, PartialEq)]
-#[pyclass(eq, eq_int)]
+#[pyclass(module = "ants_engine", eq, eq_int)]
 pub enum Direction {
     North,
     East,
@@ -72,7 +72,7 @@ impl Distribution<Direction> for Standard {
 
 /// Represents the reason the game finished.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[pyclass(eq, eq_int)]
+#[pyclass(module = "ants_engine", eq, eq_int)]
 pub enum FinishedReason {
     /// The game ended because there was only one player left.
     LoneSurvivor,
@@ -90,7 +90,7 @@ pub enum FinishedReason {
 /// If the direction is not a valid move, the ant will stay in place.
 /// Or if the provided location is not a valid ant, the action will be ignored.
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(module = "ants_engine")]
 pub struct Action {
     row: usize,
     col: usize,
@@ -117,7 +117,7 @@ impl Action {
 
 /// Represents an entity in the game state.
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(name = "Entity", module = "ants_engine", get_all)]
 pub struct StateEntity {
     /// The name of the entity.
     pub name: String,
@@ -133,7 +133,7 @@ pub struct StateEntity {
 
 /// Represents an ant in the game state.
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(name = "Ant", module = "ants_engine", get_all)]
 pub struct PlayerAnt {
     /// The unique identifier for the ant.
     pub id: String,

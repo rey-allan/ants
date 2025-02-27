@@ -3,8 +3,6 @@
 //! The core engine for the Ants game.
 //! Inspired by [Google's Ants AI Challenge](http://ants.aichallenge.org/).
 
-use pyo3::prelude::*;
-
 pub mod game;
 pub use game::Action;
 pub use game::Direction;
@@ -16,12 +14,18 @@ mod entities;
 mod map;
 mod replay;
 
+use game::PlayerAnt;
+use game::StateEntity;
+use pyo3::prelude::*;
+
 #[pymodule]
-fn ants_engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn ants_ai(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Action>()?;
     m.add_class::<Direction>()?;
     m.add_class::<FinishedReason>()?;
     m.add_class::<Game>()?;
     m.add_class::<GameState>()?;
+    m.add_class::<PlayerAnt>()?;
+    m.add_class::<StateEntity>()?;
     Ok(())
 }
