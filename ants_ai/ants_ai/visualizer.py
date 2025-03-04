@@ -1,6 +1,8 @@
 import json
+import re
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Any, List, Self
 
 import pygame
 
@@ -131,6 +133,84 @@ class Replay:
         )
 
 
+class Entity(ABC):
+    """An abstract class representing an entity in the game."""
+
+    @abstractmethod
+    def draw(self) -> None:
+        """Draws the entity."""
+        raise NotImplementedError
+
+
+@dataclass
+class Ant(Entity):
+    """A class representing an ant in the game.
+
+    Attributes:
+        player (int): The player that owns the ant.
+        location (tuple[int]): The location of the ant as a tuple of (row, col).
+    """
+
+    player: int
+    """The player that owns the ant."""
+    location: tuple[int]
+    """The location of the ant as a tuple of (row, col)."""
+
+    def draw(self) -> None:
+        pass
+
+
+@dataclass
+class Food(Entity):
+    """A class representing food in the game.
+
+    Attributes:
+        location (tuple[int]): The location of the food as a tuple of (row, col).
+    """
+
+    location: tuple[int]
+    """The location of the food as a tuple of (row, col)."""
+
+    def draw(self) -> None:
+        pass
+
+
+@dataclass
+class Hill(Entity):
+    """A class representing a hill in the game.
+
+    Attributes:
+        player (int): The player that owns the hill.
+        location (tuple[int]): The location of the hill as a tuple of (row, col).
+        alive (bool): Whether the hill is alive or not.
+    """
+
+    player: int
+    """The player that owns the hill."""
+    location: tuple[int]
+    """The location of the hill as a tuple of (row, col)."""
+    alive: bool
+    """Whether the hill is alive or not."""
+
+    def draw(self) -> None:
+        pass
+
+
+@dataclass
+class Water(Entity):
+    """A class representing water in the game.
+
+    Attributes:
+        location (tuple[int]): The location of the water as a tuple of (row, col).
+    """
+
+    location: tuple[int]
+    """The location of the water as a tuple of (row, col)."""
+
+    def draw(self) -> None:
+        pass
+
+
 class Visualizer:
     """A class for visualizing a replay of a full Ants game.
 
@@ -142,6 +222,7 @@ class Visualizer:
         pygame.init()
 
         self._replay = self._load_replay(replay_filename)
+        self._map = self._parse_map()
         self._screen = pygame.display.set_mode((700, 700))
         self._clock = pygame.time.Clock()
 
@@ -159,3 +240,42 @@ class Visualizer:
     def _load_replay(self, replay_filename: str) -> Replay:
         with open(replay_filename, "r") as file:
             return Replay.from_json(json.load(file))
+
+    def _parse_map(self) -> List[List[List[Entity]]]:
+        regex = re.compile(r"m (.*)")
+        map = [
+            [[] for _ in range(self._replay.map.width)]
+            for _ in range(self._replay.map.height)
+        ]
+
+        for row, line in enumerate(regex.finditer(self._replay.map.contents)):
+            for col, char in enumerate(line.group(1).strip()):
+                # Ignore land
+                if char == ".":
+                    continue
+
+                location = (row, col)
+                entities = None
+
+                # Max 10 players
+                if "a" <= char <= "j":
+                    player = ord(char) - ord("a")
+                    entities = [Ant(player, location)]
+                elif "A" <= char <= "J":
+                    player = ord(char) - ord("A")
+                    entities = [Hill(player, location, False), Ant(player, location)]
+                elif "0" <= char <= "9":
+                    player = int(char)
+                    entities = [Hill(player, location, True)]
+                elif char == "*":
+                    entities = [Food(location)]
+                elif char == "%":
+                    entities = [Water(location)]
+                else:
+                    raise ValueError(
+                        f"Unknown entity in map with character value: {char}"
+                    )
+
+                map[row][col] = entities
+
+        return map
