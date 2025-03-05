@@ -192,7 +192,7 @@ class Food(Entity):
     """The location of the food as a tuple of (row, col)."""
 
     def draw(self, screen: pygame.Surface, scale: int) -> None:
-        pass
+        self._draw_square(screen, self.location, scale, (153, 145, 102))
 
 
 @dataclass
