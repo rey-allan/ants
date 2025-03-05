@@ -1,9 +1,12 @@
 import json
+import os
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List, Self
 
+# Hide the annoying pygame support prompt
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame
 
 
@@ -220,9 +223,13 @@ class Visualizer:
 
     def __init__(self, replay_filename: str) -> None:
         pygame.init()
+        pygame.display.set_caption("Ants Replay Visualizer")
+
+        self._land_color = (153, 120, 71)
 
         self._replay = self._load_replay(replay_filename)
         self._map = self._parse_map()
+
         self._screen = pygame.display.set_mode((700, 700))
         self._clock = pygame.time.Clock()
 
@@ -235,7 +242,18 @@ class Visualizer:
                 if event.type == pygame.QUIT:
                     running = False
 
+            self._draw_map()
+            pygame.display.flip()
+
         pygame.quit()
+
+    def _draw_map(self) -> None:
+        self._screen.fill(self._land_color)
+
+        for i in range(self._replay.map.height):
+            for j in range(self._replay.map.width):
+                for entity in self._map[i][j]:
+                    entity.draw()
 
     def _load_replay(self, replay_filename: str) -> Replay:
         with open(replay_filename, "r") as file:

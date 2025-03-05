@@ -2,7 +2,7 @@ import random
 import time
 from pathlib import Path
 
-from ants_ai import Action, AntsEnv, Direction
+from ants_ai import Action, AntsEnv, Direction, Visualizer
 
 
 class RandomAgent:
@@ -41,6 +41,8 @@ def main() -> None:
 
     print(f"Game finished. Scores: {rewards}. Reason: {info['done_reason']}")
     print(f"Game took {time.time() - start} seconds")
+
+    Visualizer("/tmp/tutorial_replay.json").run()
 
 
 if __name__ == "__main__":
