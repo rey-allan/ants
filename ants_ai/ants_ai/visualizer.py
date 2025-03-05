@@ -140,8 +140,14 @@ class Entity(ABC):
     """An abstract class representing an entity in the game."""
 
     @abstractmethod
-    def draw(self) -> None:
-        """Draws the entity."""
+    def draw(self, screen: pygame.Surface, scale: int) -> None:
+        """Draws the entity.
+
+        :param screen: The screen to draw the entity on.
+        :type screen: pygame.Surface
+        :param scale: The scale of the entity.
+        :type scale: int
+        """
         raise NotImplementedError
 
 
@@ -159,7 +165,7 @@ class Ant(Entity):
     location: tuple[int]
     """The location of the ant as a tuple of (row, col)."""
 
-    def draw(self) -> None:
+    def draw(self, screen: pygame.Surface, scale: int) -> None:
         pass
 
 
@@ -174,7 +180,7 @@ class Food(Entity):
     location: tuple[int]
     """The location of the food as a tuple of (row, col)."""
 
-    def draw(self) -> None:
+    def draw(self, screen: pygame.Surface, scale: int) -> None:
         pass
 
 
@@ -195,7 +201,7 @@ class Hill(Entity):
     alive: bool
     """Whether the hill is alive or not."""
 
-    def draw(self) -> None:
+    def draw(self, screen: pygame.Surface, scale: int) -> None:
         pass
 
 
@@ -210,7 +216,7 @@ class Water(Entity):
     location: tuple[int]
     """The location of the water as a tuple of (row, col)."""
 
-    def draw(self) -> None:
+    def draw(self, screen: pygame.Surface, scale: int) -> None:
         pass
 
 
@@ -219,18 +225,24 @@ class Visualizer:
 
     :param replay_filename: The filename of the replay to visualize.
     :type replay_filename: str
+    :param scale: The scale factor for the map when visualizing, defaults to 10.
+    :type scale: int
     """
 
-    def __init__(self, replay_filename: str) -> None:
+    def __init__(self, replay_filename: str, scale: int = 10) -> None:
         pygame.init()
         pygame.display.set_caption("Ants Replay Visualizer")
 
-        self._land_color = (153, 120, 71)
-
         self._replay = self._load_replay(replay_filename)
+        self._width = self._replay.map.width
+        self._height = self._replay.map.height
         self._map = self._parse_map()
 
-        self._screen = pygame.display.set_mode((700, 700))
+        self._scale = scale
+        self._window_size = (self._width * self._scale, self._height * self._scale)
+        self._land_color = (159, 119, 65)
+
+        self._screen = pygame.display.set_mode(self._window_size)
         self._clock = pygame.time.Clock()
 
     def run(self) -> None:
@@ -250,10 +262,10 @@ class Visualizer:
     def _draw_map(self) -> None:
         self._screen.fill(self._land_color)
 
-        for i in range(self._replay.map.height):
-            for j in range(self._replay.map.width):
+        for i in range(self._height):
+            for j in range(self._width):
                 for entity in self._map[i][j]:
-                    entity.draw()
+                    entity.draw(self._screen, self._scale)
 
     def _load_replay(self, replay_filename: str) -> Replay:
         with open(replay_filename, "r") as file:
@@ -261,10 +273,7 @@ class Visualizer:
 
     def _parse_map(self) -> List[List[List[Entity]]]:
         regex = re.compile(r"m (.*)")
-        map = [
-            [[] for _ in range(self._replay.map.width)]
-            for _ in range(self._replay.map.height)
-        ]
+        map = [[[] for _ in range(self._width)] for _ in range(self._height)]
 
         for row, line in enumerate(regex.finditer(self._replay.map.contents)):
             for col, char in enumerate(line.group(1).strip()):

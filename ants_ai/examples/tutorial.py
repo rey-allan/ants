@@ -42,7 +42,7 @@ def main() -> None:
     print(f"Game finished. Scores: {rewards}. Reason: {info['done_reason']}")
     print(f"Game took {time.time() - start} seconds")
 
-    Visualizer("/tmp/tutorial_replay.json").run()
+    Visualizer("/tmp/tutorial_replay.json", scale=20).run()
 
 
 if __name__ == "__main__":
