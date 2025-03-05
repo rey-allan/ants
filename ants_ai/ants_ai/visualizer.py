@@ -150,6 +150,17 @@ class Entity(ABC):
         """
         raise NotImplementedError
 
+    def _draw_square(
+        self,
+        screen: pygame.Surface,
+        location: tuple[int],
+        scale: int,
+        color: tuple[int],
+    ) -> None:
+        row, col = location
+        rect = (col * scale, row * scale, scale, scale)
+        pygame.draw.rect(screen, color, rect)
+
 
 @dataclass
 class Ant(Entity):
@@ -217,7 +228,7 @@ class Water(Entity):
     """The location of the water as a tuple of (row, col)."""
 
     def draw(self, screen: pygame.Surface, scale: int) -> None:
-        pass
+        self._draw_square(screen, self.location, scale, (79, 143, 186))
 
 
 class Visualizer:
