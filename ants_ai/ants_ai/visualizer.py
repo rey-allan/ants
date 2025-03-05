@@ -9,6 +9,19 @@ from typing import Any, List, Self
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame
 
+PLAYER_COLORS = {
+    0: (255, 0, 0),  # Red
+    1: (0, 255, 0),  # Green
+    2: (0, 0, 255),  # Blue
+    3: (255, 165, 0),  # Orange
+    4: (128, 0, 128),  # Purple
+    5: (255, 255, 0),  # Yellow
+    6: (0, 255, 255),  # Cyan
+    7: (255, 105, 180),  # Pink
+    8: (75, 0, 130),  # Indigo
+    9: (192, 192, 192),  # Silver
+}
+
 
 @dataclass
 class Event:
@@ -177,7 +190,11 @@ class Ant(Entity):
     """The location of the ant as a tuple of (row, col)."""
 
     def draw(self, screen: pygame.Surface, scale: int) -> None:
-        pass
+        row, col = self.location
+        color = PLAYER_COLORS[self.player]
+        radius = scale // 2
+        center = (col * scale + radius, row * scale + radius)
+        pygame.draw.circle(screen, color, center, radius)
 
 
 @dataclass
