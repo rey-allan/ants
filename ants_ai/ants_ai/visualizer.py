@@ -1,3 +1,4 @@
+import importlib.resources
 import json
 import os
 import re
@@ -220,6 +221,7 @@ class Hill(Entity):
         player (int): The player that owns the hill.
         location (tuple[int]): The location of the hill as a tuple of (row, col).
         alive (bool): Whether the hill is alive or not.
+        sprites (tuple[pygame.Surface]): The sprites for the hill (alive and razed).
     """
 
     player: int
@@ -228,9 +230,25 @@ class Hill(Entity):
     """The location of the hill as a tuple of (row, col)."""
     alive: bool
     """Whether the hill is alive or not."""
+    sprites: tuple[pygame.Surface]
+    """The sprites for the hill (alive and razed)."""
 
     def draw(self, screen: pygame.Surface, scale: int) -> None:
-        pass
+        row, col = self.location
+        sprite = self.sprites[0] if self.alive else self.sprites[1]
+        sprite = pygame.transform.scale(sprite, (scale, scale))
+
+        # Draw an outline of the player's color on the sprite to indicate ownership of the hill
+        # Only draw the outline if the hill is alive
+        if self.alive:
+            color = PLAYER_COLORS[self.player]
+            overlay = pygame.Surface((scale, scale), pygame.SRCALPHA)
+            center = (scale // 2, scale // 2)
+            radius = scale // 4
+            pygame.draw.circle(overlay, color, center, radius, width=3)
+            sprite.blit(overlay, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+
+        screen.blit(sprite, (col * scale, row * scale))
 
 
 @dataclass
@@ -260,6 +278,8 @@ class Visualizer:
     def __init__(self, replay_filename: str, scale: int = 10) -> None:
         pygame.init()
         pygame.display.set_caption("Ants Replay Visualizer")
+
+        self._hill_sprites = self._load_hill_sprites()
 
         self._replay = self._load_replay(replay_filename)
         self._width = self._replay.map.width
@@ -295,6 +315,19 @@ class Visualizer:
                 for entity in self._map[i][j]:
                     entity.draw(self._screen, self._scale)
 
+    def _load_hill_sprites(self) -> tuple[pygame.Surface]:
+        with importlib.resources.path("ants_ai.assets", "hill.png") as img_path:
+            spritesheet = pygame.image.load(str(img_path))
+            w, h = spritesheet.get_size()
+            # We have 2 states (alive and razed) stacked vertically
+            sprite_height = h // 2
+            # Extract the "alive" anthill (top half)
+            alive = spritesheet.subsurface((0, 0, w, sprite_height))
+            # Extract the "razed" anthill (bottom half)
+            razed = spritesheet.subsurface((0, sprite_height, w, sprite_height))
+
+        return alive, razed
+
     def _load_replay(self, replay_filename: str) -> Replay:
         with open(replay_filename, "r") as file:
             return Replay.from_json(json.load(file))
@@ -318,10 +351,21 @@ class Visualizer:
                     entities = [Ant(player, location)]
                 elif "A" <= char <= "J":
                     player = ord(char) - ord("A")
-                    entities = [Hill(player, location, False), Ant(player, location)]
+                    sprites = [
+                        self._hill_sprites[0].copy(),
+                        self._hill_sprites[1].copy(),
+                    ]
+                    entities = [
+                        Hill(player, location, True, sprites),
+                        Ant(player, location),
+                    ]
                 elif "0" <= char <= "9":
                     player = int(char)
-                    entities = [Hill(player, location, True)]
+                    sprites = [
+                        self._hill_sprites[0].copy(),
+                        self._hill_sprites[1].copy(),
+                    ]
+                    entities = [Hill(player, location, True, sprites)]
                 elif char == "*":
                     entities = [Food(location)]
                 elif char == "%":
