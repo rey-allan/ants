@@ -164,17 +164,6 @@ class Entity(ABC):
         """
         raise NotImplementedError
 
-    def _draw_square(
-        self,
-        screen: pygame.Surface,
-        location: tuple[int],
-        scale: int,
-        color: tuple[int],
-    ) -> None:
-        row, col = location
-        rect = (col * scale, row * scale, scale, scale)
-        pygame.draw.rect(screen, color, rect)
-
 
 @dataclass
 class Ant(Entity):
@@ -195,7 +184,7 @@ class Ant(Entity):
         color = PLAYER_COLORS[self.player]
         radius = scale // 2
         center = (col * scale + radius, row * scale + radius)
-        pygame.draw.circle(screen, color, center, radius)
+        pygame.draw.circle(screen, color, center, scale // 5)
 
 
 @dataclass
@@ -210,7 +199,9 @@ class Food(Entity):
     """The location of the food as a tuple of (row, col)."""
 
     def draw(self, screen: pygame.Surface, scale: int) -> None:
-        self._draw_square(screen, self.location, scale, (153, 145, 102))
+        row, col = self.location
+        rect = (col * scale, row * scale, scale // 3, scale // 3)
+        pygame.draw.rect(screen, (153, 145, 102), rect)
 
 
 @dataclass
@@ -278,9 +269,11 @@ class Visualizer:
     :type replay_filename: str
     :param scale: The scale factor for the map when visualizing, defaults to 10.
     :type scale: int
+    :param speed: The speed of the visualization in FPS, defaults to 1.
+    :type speed: int
     """
 
-    def __init__(self, replay_filename: str, scale: int = 10) -> None:
+    def __init__(self, replay_filename: str, scale: int = 10, speed: int = 1) -> None:
         pygame.init()
         pygame.display.set_caption("Ants Replay Visualizer")
 
@@ -298,10 +291,12 @@ class Visualizer:
 
         self._screen = pygame.display.set_mode(self._window_size)
         self._clock = pygame.time.Clock()
+        self._speed = speed
 
     def run(self) -> None:
         """Runs the visualizer."""
         running = True
+        turn = 0
 
         while running:
             for event in pygame.event.get():
@@ -310,6 +305,13 @@ class Visualizer:
 
             self._draw_map()
             pygame.display.flip()
+
+            if turn >= len(self._replay.turns):
+                continue
+
+            self._do_replay(self._replay.turns[turn])
+            turn += 1
+            self._clock.tick(self._speed)
 
         pygame.quit()
 
@@ -320,6 +322,23 @@ class Visualizer:
             for j in range(self._width):
                 for entity in self._map[i][j]:
                     entity.draw(self._screen, self._scale)
+
+    def _do_replay(self, turn: Turn) -> None:
+        for event in turn.events:
+            if event.event_type == "Spawn":
+                self._replay_spawn(event)
+
+    def _replay_spawn(self, event: Event) -> None:
+        row, col = event.location
+
+        if event.entity == "Ant":
+            # Ants are only spawned in hills
+            self._map[row][col].append(Ant(event.player, event.location))
+        elif event.entity == "Food":
+            # Food is guaranteed to be spawn only in empty spaces
+            self._map[row][col] = [Food(event.location)]
+        else:
+            raise RuntimeError(f"Invalid 'Spawn' event for entity '{event.entity}'!")
 
     def _load_hill_sprites(self) -> tuple[pygame.Surface]:
         with importlib.resources.path("ants_ai.assets", "hill.png") as img_path:
