@@ -11,16 +11,16 @@ os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame
 
 PLAYER_COLORS = {
-    0: (255, 0, 0),  # Red
-    1: (0, 255, 0),  # Green
-    2: (0, 0, 255),  # Blue
-    3: (255, 165, 0),  # Orange
-    4: (128, 0, 128),  # Purple
-    5: (255, 255, 0),  # Yellow
-    6: (0, 255, 255),  # Cyan
-    7: (255, 105, 180),  # Pink
-    8: (75, 0, 130),  # Indigo
-    9: (192, 192, 192),  # Silver
+    0: (212, 17, 50),
+    1: (232, 110, 48),
+    2: (230, 179, 25),
+    3: (246, 246, 85),
+    4: (166, 229, 153),
+    5: (46, 184, 126),
+    6: (48, 140, 232),
+    7: (99, 23, 207),
+    8: (214, 92, 214),
+    9: (207, 175, 183),
 }
 
 
@@ -246,7 +246,7 @@ class Hill(Entity):
             center = (scale // 2, scale // 2)
             radius = scale // 4
             pygame.draw.circle(overlay, color, center, radius, width=3)
-            sprite.blit(overlay, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+            sprite.blit(overlay, (0, 0))
 
         screen.blit(sprite, (col * scale, row * scale))
 
@@ -257,13 +257,18 @@ class Water(Entity):
 
     Attributes:
         location (tuple[int]): The location of the water as a tuple of (row, col).
+        sprite: (pygame.Surface): The sprite to use for the water.
     """
 
     location: tuple[int]
     """The location of the water as a tuple of (row, col)."""
+    sprite: pygame.Surface
+    """The sprite to use for the water."""
 
     def draw(self, screen: pygame.Surface, scale: int) -> None:
-        self._draw_square(screen, self.location, scale, (79, 143, 186))
+        row, col = self.location
+        sprite = pygame.transform.scale(self.sprite, (scale, scale))
+        screen.blit(sprite, (col * scale, row * scale))
 
 
 class Visualizer:
@@ -280,6 +285,7 @@ class Visualizer:
         pygame.display.set_caption("Ants Replay Visualizer")
 
         self._hill_sprites = self._load_hill_sprites()
+        self._water_sprite = self._load_water_sprite()
 
         self._replay = self._load_replay(replay_filename)
         self._width = self._replay.map.width
@@ -288,7 +294,7 @@ class Visualizer:
 
         self._scale = scale
         self._window_size = (self._width * self._scale, self._height * self._scale)
-        self._land_color = (159, 119, 65)
+        self._land_color = (120, 89, 58)
 
         self._screen = pygame.display.set_mode(self._window_size)
         self._clock = pygame.time.Clock()
@@ -327,6 +333,10 @@ class Visualizer:
             razed = spritesheet.subsurface((0, sprite_height, w, sprite_height))
 
         return alive, razed
+
+    def _load_water_sprite(self) -> pygame.Surface:
+        with importlib.resources.path("ants_ai.assets", "water.png") as img_path:
+            return pygame.image.load(str(img_path))
 
     def _load_replay(self, replay_filename: str) -> Replay:
         with open(replay_filename, "r") as file:
@@ -369,7 +379,7 @@ class Visualizer:
                 elif char == "*":
                     entities = [Food(location)]
                 elif char == "%":
-                    entities = [Water(location)]
+                    entities = [Water(location, self._water_sprite)]
                 else:
                     raise ValueError(
                         f"Unknown entity in map with character value: {char}"
