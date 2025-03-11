@@ -331,6 +331,12 @@ class Visualizer:
                 self._replay_remove(event)
             elif event.event_type == "Move":
                 self._replay_move(event)
+            elif event.event_type == "Attack":
+                self.replay_attack(event)
+            else:
+                raise RuntimeError(
+                    f"Invalid event type '{event.event_type}' in event {event}."
+                )
 
     def _replay_spawn(self, event: Event) -> None:
         row, col = event.location
@@ -392,6 +398,19 @@ class Visualizer:
         # Move the ant to its new location
         ant.location = (dest_row, dest_col)
         self._map[dest_row][dest_col].append(ant)
+
+    def replay_attack(self, event: Event) -> None:
+        row, col = event.location
+        dest_row, dest_col = event.destination
+
+        # Draw a line from the attacking ant to the target
+        pygame.draw.line(
+            self._screen,
+            (0, 0, 0),
+            (col * self._scale, row * self._scale),
+            (dest_col * self._scale, dest_row * self._scale),
+            2,
+        )
 
     def _load_hill_sprites(self) -> tuple[pygame.Surface]:
         with importlib.resources.path("ants_ai.assets", "hill.png") as img_path:
