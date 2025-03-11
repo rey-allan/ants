@@ -327,6 +327,8 @@ class Visualizer:
         for event in turn.events:
             if event.event_type == "Spawn":
                 self._replay_spawn(event)
+            elif event.event_type == "Remove":
+                self._replay_remove(event)
 
     def _replay_spawn(self, event: Event) -> None:
         row, col = event.location
@@ -339,6 +341,26 @@ class Visualizer:
             self._map[row][col] = [Food(event.location)]
         else:
             raise RuntimeError(f"Invalid 'Spawn' event for entity '{event.entity}'!")
+
+    def _replay_remove(self, event: Event) -> None:
+        row, col = event.location
+
+        if event.entity == "Ant":
+            # Ants can be removed on top of a hill
+            self._map[row][col] = list(
+                filter(lambda entity: not isinstance(entity, Ant), self._map[row][col])
+            )
+        elif event.entity == "Food":
+            # Food is guaranteed to be removed from empty spaces
+            self._map[row][col] = []
+        elif event.entity == "Hill":
+            # When hills are removed they are "razed"
+            hill: Hill = list(
+                filter(lambda entity: isinstance(entity, Hill), self._map[row][col])
+            )[0]
+            hill.alive = False
+        else:
+            raise RuntimeError(f"Invalid 'Remove' event for entity '{event.entity}'!")
 
     def _load_hill_sprites(self) -> tuple[pygame.Surface]:
         with importlib.resources.path("ants_ai.assets", "hill.png") as img_path:
