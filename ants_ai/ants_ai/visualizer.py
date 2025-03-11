@@ -329,6 +329,8 @@ class Visualizer:
                 self._replay_spawn(event)
             elif event.event_type == "Remove":
                 self._replay_remove(event)
+            elif event.event_type == "Move":
+                self._replay_move(event)
 
     def _replay_spawn(self, event: Event) -> None:
         row, col = event.location
@@ -340,7 +342,9 @@ class Visualizer:
             # Food is guaranteed to be spawn only in empty spaces
             self._map[row][col] = [Food(event.location)]
         else:
-            raise RuntimeError(f"Invalid 'Spawn' event for entity '{event.entity}'!")
+            raise RuntimeError(
+                f"Invalid 'Spawn' event for entity '{event.entity}': {event}."
+            )
 
     def _replay_remove(self, event: Event) -> None:
         row, col = event.location
@@ -360,7 +364,34 @@ class Visualizer:
             )[0]
             hill.alive = False
         else:
-            raise RuntimeError(f"Invalid 'Remove' event for entity '{event.entity}'!")
+            raise RuntimeError(
+                f"Invalid 'Remove' event for entity '{event.entity}': {event}."
+            )
+
+    def _replay_move(self, event: Event) -> None:
+        row, col = event.location
+        dest_row, dest_col = event.destination
+
+        # Find the ant to move
+        ant: Ant = list(
+            filter(lambda entity: isinstance(entity, Ant), self._map[row][col])
+        )
+
+        if not ant:
+            raise RuntimeError(
+                f"No ant found at location ({row},{col}) to move in event: {event}."
+            )
+
+        ant = ant[0]
+
+        # Remove the ant from its current location
+        self._map[row][col] = list(
+            filter(lambda entity: not isinstance(entity, Ant), self._map[row][col])
+        )
+
+        # Move the ant to its new location
+        ant.location = (dest_row, dest_col)
+        self._map[dest_row][dest_col].append(ant)
 
     def _load_hill_sprites(self) -> tuple[pygame.Surface]:
         with importlib.resources.path("ants_ai.assets", "hill.png") as img_path:
