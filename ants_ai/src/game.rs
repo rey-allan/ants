@@ -251,7 +251,6 @@ impl Game {
 
         self.turn += 1;
 
-        self.remove_dead_ants();
         self.move_ants(actions);
         self.attack();
         self.raze_hills();
@@ -264,6 +263,10 @@ impl Game {
         self.spawn_food_randomly();
 
         self.check_for_endgame();
+
+        // Compute the game state before removing dead ants so that the dead ants are included in the state
+        let state = self.game_state();
+        self.remove_dead_ants();
 
         self.replay_logger.log_turn(
             self.turn,
@@ -279,7 +282,7 @@ impl Game {
             self.replay_logger.save();
         }
 
-        self.game_state()
+        state
     }
 
     /// Draws the game to the console.
