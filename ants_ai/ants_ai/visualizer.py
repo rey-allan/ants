@@ -1,10 +1,12 @@
 import importlib.resources
 import json
+import math
 import os
 import re
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, List, Self
+from typing import Any, Self
 
 # Hide the annoying pygame support prompt
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
@@ -22,6 +24,8 @@ PLAYER_COLORS = {
     8: (214, 92, 214),
     9: (207, 175, 183),
 }
+UPDATE_SIZE_SPEED = 20
+UPDATE_MOVE_SPEED = 5
 
 
 @dataclass
@@ -150,19 +154,83 @@ class Replay:
         )
 
 
+@dataclass
 class Entity(ABC):
-    """An abstract class representing an entity in the game."""
+    """An abstract class representing an entity in the game.
+
+    Attributes:
+        location (tuple[int]): The location of the entity as a tuple of (row, col).
+        target_location (tuple[int]): The target location of the entity as a tuple of (row, col).
+        size (int): The size of the entity.
+        target_size (int): The target size of the entity.
+        alive (bool): Whether the entity is alive or not.
+        ready (bool): Whether the entity is ready
+    """
+
+    location: tuple[int]
+    """The location of the entity as a tuple of (row, col)."""
+    target_location: tuple[int]
+    """The target location of the entity as a tuple of (row, col)."""
+    scale: int
+    """The scale of the entity on the screen."""
+    size: int
+    """The size of the entity."""
+    target_size: int
+    """The target size of the entity."""
+    alive: bool
+    """Whether the entity is alive or not."""
+    ready: bool
+    """Whether the entity is ready or not."""
 
     @abstractmethod
-    def draw(self, screen: pygame.Surface, scale: int) -> None:
+    def draw(self, screen: pygame.Surface) -> None:
         """Draws the entity.
 
         :param screen: The screen to draw the entity on.
         :type screen: pygame.Surface
-        :param scale: The scale of the entity.
-        :type scale: int
         """
         raise NotImplementedError
+
+    def update(self, dt: float) -> None:
+        """Updates the entity.
+
+        :param dt: The time since the last update.
+        :type dt: float
+        """
+        # Use `math.copysign` to get the sign of the difference between the target size and the current size
+        # This is needed to ensure that the size is updated in the correct direction (grow or shrink)
+        self.size += (
+            dt * UPDATE_SIZE_SPEED * math.copysign(1, self.target_size - self.size)
+        )
+        # Cap the size to 0 when shrinking and the target size when growing
+        self.size = (
+            max(0, self.size)
+            if self.target_size == 0
+            else min(self.target_size, self.size)
+        )
+
+        # We do the same for the location
+        location_dt = dt * UPDATE_MOVE_SPEED
+        # Cap the update to 1 if it's larger since ants only move 1 cell at a time
+        location_dt = min(1, location_dt)
+
+        self.location = (
+            self.location[0]
+            + location_dt
+            * math.copysign(1, self.target_location[0] - self.location[0]),
+            self.location[1]
+            + location_dt
+            * math.copysign(1, self.target_location[1] - self.location[1]),
+        )
+        # Cap the location to the target location
+        self.location = (
+            min(self.target_location[0], self.location[0]),
+            min(self.target_location[1], self.location[1]),
+        )
+
+        self.ready = (
+            self.size == self.target_size and self.location == self.target_location
+        )
 
 
 @dataclass
@@ -171,36 +239,32 @@ class Ant(Entity):
 
     Attributes:
         player (int): The player that owns the ant.
-        location (tuple[int]): The location of the ant as a tuple of (row, col).
     """
 
     player: int
     """The player that owns the ant."""
-    location: tuple[int]
-    """The location of the ant as a tuple of (row, col)."""
 
-    def draw(self, screen: pygame.Surface, scale: int) -> None:
+    def draw(self, screen: pygame.Surface) -> None:
         row, col = self.location
         color = PLAYER_COLORS[self.player]
-        radius = scale // 2
-        center = (col * scale + radius, row * scale + radius)
-        pygame.draw.circle(screen, color, center, scale // 5)
+        radius = self.scale // 2
+        center = (col * self.scale + radius, row * self.scale + radius)
+        pygame.draw.circle(screen, color, center, self.size)
 
 
 @dataclass
 class Food(Entity):
-    """A class representing food in the game.
+    """A class representing food in the game."""
 
-    Attributes:
-        location (tuple[int]): The location of the food as a tuple of (row, col).
-    """
-
-    location: tuple[int]
-    """The location of the food as a tuple of (row, col)."""
-
-    def draw(self, screen: pygame.Surface, scale: int) -> None:
+    def draw(self, screen: pygame.Surface) -> None:
         row, col = self.location
-        rect = (col * scale, row * scale, scale // 3, scale // 3)
+        offset = (self.scale - self.size) // 2
+        rect = (
+            col * self.scale + offset,
+            row * self.scale + offset,
+            self.size,
+            self.size,
+        )
         pygame.draw.rect(screen, (153, 145, 102), rect)
 
 
@@ -210,36 +274,30 @@ class Hill(Entity):
 
     Attributes:
         player (int): The player that owns the hill.
-        location (tuple[int]): The location of the hill as a tuple of (row, col).
-        alive (bool): Whether the hill is alive or not.
         sprites (tuple[pygame.Surface]): The sprites for the hill (alive and razed).
     """
 
     player: int
     """The player that owns the hill."""
-    location: tuple[int]
-    """The location of the hill as a tuple of (row, col)."""
-    alive: bool
-    """Whether the hill is alive or not."""
     sprites: tuple[pygame.Surface]
     """The sprites for the hill (alive and razed)."""
 
-    def draw(self, screen: pygame.Surface, scale: int) -> None:
+    def draw(self, screen: pygame.Surface) -> None:
         row, col = self.location
         sprite = self.sprites[0] if self.alive else self.sprites[1]
-        sprite = pygame.transform.scale(sprite, (scale, scale))
+        sprite = pygame.transform.scale(sprite, (self.scale, self.scale))
 
         # Draw an outline of the player's color on the sprite to indicate ownership of the hill
         # Only draw the outline if the hill is alive
         if self.alive:
             color = PLAYER_COLORS[self.player]
-            overlay = pygame.Surface((scale, scale), pygame.SRCALPHA)
-            center = (scale // 2, scale // 2)
-            radius = scale // 4
+            overlay = pygame.Surface((self.scale, self.scale), pygame.SRCALPHA)
+            center = (self.scale // 2, self.scale // 2)
+            radius = self.scale // 4
             pygame.draw.circle(overlay, color, center, radius, width=3)
             sprite.blit(overlay, (0, 0))
 
-        screen.blit(sprite, (col * scale, row * scale))
+        screen.blit(sprite, (col * self.scale, row * self.scale))
 
 
 @dataclass
@@ -247,19 +305,16 @@ class Water(Entity):
     """A class representing water in the game.
 
     Attributes:
-        location (tuple[int]): The location of the water as a tuple of (row, col).
         sprite: (pygame.Surface): The sprite to use for the water.
     """
 
-    location: tuple[int]
-    """The location of the water as a tuple of (row, col)."""
     sprite: pygame.Surface
     """The sprite to use for the water."""
 
-    def draw(self, screen: pygame.Surface, scale: int) -> None:
+    def draw(self, screen: pygame.Surface) -> None:
         row, col = self.location
-        sprite = pygame.transform.scale(self.sprite, (scale, scale))
-        screen.blit(sprite, (col * scale, row * scale))
+        sprite = pygame.transform.scale(self.sprite, (self.scale, self.scale))
+        screen.blit(sprite, (col * self.scale, row * self.scale))
 
 
 class Visualizer:
@@ -271,9 +326,17 @@ class Visualizer:
     :type scale: int
     :param speed: The speed of the visualization in FPS, defaults to 1.
     :type speed: int
+    :param show_grid: Whether to show the grid lines on the map, defaults to False.
+    :type show_grid: bool
     """
 
-    def __init__(self, replay_filename: str, scale: int = 10, speed: int = 1) -> None:
+    def __init__(
+        self,
+        replay_filename: str,
+        scale: int = 10,
+        speed: int = 50,
+        show_grid: bool = False,
+    ) -> None:
         pygame.init()
         pygame.display.set_caption("Ants Replay Visualizer")
 
@@ -283,15 +346,22 @@ class Visualizer:
         self._replay = self._load_replay(replay_filename)
         self._width = self._replay.map.width
         self._height = self._replay.map.height
-        self._map = self._parse_map()
-
         self._scale = scale
+
+        self._water: list[Water] = []
+        self._hills: dict[tuple[int], Hill] = {}
+        self._food: dict[tuple[int], Food] = {}
+        self._ants: dict[tuple[int], Ant] = {}
+        self._parse_map()
+
         self._window_size = (self._width * self._scale, self._height * self._scale)
         self._land_color = (120, 89, 58)
 
         self._screen = pygame.display.set_mode(self._window_size)
         self._clock = pygame.time.Clock()
         self._speed = speed
+        self._show_grid = show_grid
+        self._dt = 0
 
     def run(self) -> None:
         """Runs the visualizer."""
@@ -303,28 +373,81 @@ class Visualizer:
                 if event.type == pygame.QUIT:
                     running = False
 
-            self._draw_map()
-            pygame.display.flip()
-
             if turn >= len(self._replay.turns):
                 continue
 
-            self._do_replay(self._replay.turns[turn])
+            # Aggregate all events for the current turn per type in a map
+            events_per_type = defaultdict(list)
+            for event in self._replay.turns[turn].events:
+                events_per_type[event.event_type].append(event)
+
+            # Loop through all events in the current turn in the phase order
+            for event_type in ["Move", "Attack", "Remove", "Spawn"]:
+                events = events_per_type[event_type]
+
+                self._do_replay(events)
+                ready = False
+
+                while not ready:
+                    self._dt = self._clock.tick(self._speed) / 1000
+                    self._update_map()
+                    self._draw_map()
+                    self._draw_grid()
+                    pygame.display.flip()
+                    ready = self._all_ready()
+
+            self._sync_ant_locations()
+            self._remove_dead_entities()
             turn += 1
-            self._clock.tick(self._speed)
 
         pygame.quit()
 
+    def _draw_grid(self) -> None:
+        if not self._show_grid:
+            return
+
+        for row in range(self._height):
+            for col in range(self._width):
+                rect = (
+                    col * self._scale,
+                    row * self._scale,
+                    self._scale,
+                    self._scale,
+                )
+                pygame.draw.rect(self._screen, (0, 0, 0), rect, 1)
+
     def _draw_map(self) -> None:
         self._screen.fill(self._land_color)
+        for entity in [
+            *self._water,
+            *self._hills.values(),
+            *self._food.values(),
+            *self._ants.values(),
+        ]:
+            entity.draw(self._screen)
 
-        for i in range(self._height):
-            for j in range(self._width):
-                for entity in self._map[i][j]:
-                    entity.draw(self._screen, self._scale)
+    def _update_map(self) -> None:
+        for entity in [
+            *self._water,
+            *self._hills.values(),
+            *self._food.values(),
+            *self._ants.values(),
+        ]:
+            entity.update(self._dt)
 
-    def _do_replay(self, turn: Turn) -> None:
-        for event in turn.events:
+    def _all_ready(self) -> bool:
+        return all(
+            entity.ready
+            for entity in [
+                *self._water,
+                *self._hills.values(),
+                *self._food.values(),
+                *self._ants.values(),
+            ]
+        )
+
+    def _do_replay(self, events: list[Event]) -> None:
+        for event in events:
             if event.event_type == "Spawn":
                 self._replay_spawn(event)
             elif event.event_type == "Remove":
@@ -339,65 +462,48 @@ class Visualizer:
                 )
 
     def _replay_spawn(self, event: Event) -> None:
-        row, col = event.location
+        location = tuple(event.location)
 
         if event.entity == "Ant":
-            # Ants are only spawned in hills
-            self._map[row][col].append(Ant(event.player, event.location))
+            self._ants[location] = self._spawn_ant(location, event.player)
         elif event.entity == "Food":
-            # Food is guaranteed to be spawn only in empty spaces
-            self._map[row][col] = [Food(event.location)]
+            self._food[location] = self._spawn_food(location)
         else:
             raise RuntimeError(
                 f"Invalid 'Spawn' event for entity '{event.entity}': {event}."
             )
 
     def _replay_remove(self, event: Event) -> None:
-        row, col = event.location
+        location = tuple(event.location)
 
         if event.entity == "Ant":
-            # Ants can be removed on top of a hill
-            self._map[row][col] = list(
-                filter(lambda entity: not isinstance(entity, Ant), self._map[row][col])
-            )
+            self._ants[location].target_size = 0
+            self._ants[location].alive = False
         elif event.entity == "Food":
-            # Food is guaranteed to be removed from empty spaces
-            self._map[row][col] = []
+            self._food[location].target_size = 0
+            self._food[location].alive = False
         elif event.entity == "Hill":
-            # When hills are removed they are "razed"
-            hill: Hill = list(
-                filter(lambda entity: isinstance(entity, Hill), self._map[row][col])
-            )[0]
-            hill.alive = False
+            # When hills are removed they are "razed", not removed from the map
+            self._hills[location].alive = False
         else:
             raise RuntimeError(
                 f"Invalid 'Remove' event for entity '{event.entity}': {event}."
             )
 
     def _replay_move(self, event: Event) -> None:
-        row, col = event.location
-        dest_row, dest_col = event.destination
+        _from = tuple(event.location)
+        to = tuple(event.destination)
 
-        # Find the ant to move
-        ant: Ant = list(
-            filter(lambda entity: isinstance(entity, Ant), self._map[row][col])
-        )
+        ant = self._ants.get(_from)
 
         if not ant:
             raise RuntimeError(
-                f"No ant found at location ({row},{col}) to move in event: {event}."
+                f"No ant found at location {_from} to move in event: {event}."
             )
 
-        ant = ant[0]
-
-        # Remove the ant from its current location
-        self._map[row][col] = list(
-            filter(lambda entity: not isinstance(entity, Ant), self._map[row][col])
-        )
-
         # Move the ant to its new location
-        ant.location = (dest_row, dest_col)
-        self._map[dest_row][dest_col].append(ant)
+        ant.target_location = to
+        self._ants[to] = ant
 
     def replay_attack(self, event: Event) -> None:
         row, col = event.location
@@ -411,6 +517,26 @@ class Visualizer:
             (dest_col * self._scale, dest_row * self._scale),
             2,
         )
+
+    def _sync_ant_locations(self) -> None:
+        # Make sure each ant is at the right location in the list
+        # This is needed to ensure ants are drawn in the correct cells
+        # after they finish moving
+        for location, ant in list(self._ants.items()):
+            if ant.location != location:
+                del self._ants[location]
+                self._ants[ant.location] = ant
+
+    def _remove_dead_entities(self) -> None:
+        # Remove dead ants
+        for location, ant in list(self._ants.items()):
+            if not ant.alive:
+                del self._ants[location]
+
+        # Remove consumed/destroyed food
+        for location, food in list(self._food.items()):
+            if not food.alive:
+                del self._food[location]
 
     def _load_hill_sprites(self) -> tuple[pygame.Surface]:
         with importlib.resources.path("ants_ai.assets", "hill.png") as img_path:
@@ -433,9 +559,8 @@ class Visualizer:
         with open(replay_filename, "r") as file:
             return Replay.from_json(json.load(file))
 
-    def _parse_map(self) -> List[List[List[Entity]]]:
+    def _parse_map(self) -> None:
         regex = re.compile(r"m (.*)")
-        map = [[[] for _ in range(self._width)] for _ in range(self._height)]
 
         for row, line in enumerate(regex.finditer(self._replay.map.contents)):
             for col, char in enumerate(line.group(1).strip()):
@@ -444,38 +569,85 @@ class Visualizer:
                     continue
 
                 location = (row, col)
-                entities = None
 
                 # Max 10 players
                 if "a" <= char <= "j":
                     player = ord(char) - ord("a")
-                    entities = [Ant(player, location)]
+                    self._ants[location] = self._spawn_ant(location, player)
                 elif "A" <= char <= "J":
                     player = ord(char) - ord("A")
                     sprites = [
                         self._hill_sprites[0].copy(),
                         self._hill_sprites[1].copy(),
                     ]
-                    entities = [
-                        Hill(player, location, True, sprites),
-                        Ant(player, location),
-                    ]
+                    self._hills[location] = Hill(
+                        location,
+                        target_location=location,
+                        scale=self._scale,
+                        size=self._scale,
+                        target_size=self._scale,
+                        alive=True,
+                        ready=True,
+                        player=player,
+                        sprites=sprites,
+                    )
+                    self._ants[location] = self._spawn_ant(location, player)
                 elif "0" <= char <= "9":
                     player = int(char)
                     sprites = [
                         self._hill_sprites[0].copy(),
                         self._hill_sprites[1].copy(),
                     ]
-                    entities = [Hill(player, location, True, sprites)]
+                    self._hills[location] = Hill(
+                        location,
+                        target_location=location,
+                        scale=self._scale,
+                        size=self._scale,
+                        target_size=self._scale,
+                        alive=True,
+                        ready=True,
+                        player=player,
+                        sprites=sprites,
+                    )
                 elif char == "*":
-                    entities = [Food(location)]
+                    self._food[location] = self._spawn_food(location)
                 elif char == "%":
-                    entities = [Water(location, self._water_sprite)]
+                    self._water.append(
+                        Water(
+                            location,
+                            target_location=location,
+                            scale=self._scale,
+                            size=self._scale,
+                            target_size=self._scale,
+                            alive=True,
+                            ready=True,
+                            sprite=self._water_sprite,
+                        )
+                    )
                 else:
                     raise ValueError(
                         f"Unknown entity in map with character value: {char}"
                     )
 
-                map[row][col] = entities
+    def _spawn_ant(self, location: tuple[int], player: int) -> Ant:
+        return Ant(
+            location,
+            target_location=location,
+            scale=self._scale,
+            size=0,
+            target_size=self._scale // 5,
+            alive=True,
+            ready=False,
+            player=player,
+        )
 
-        return map
+    def _spawn_food(self, location: tuple[int]) -> Food:
+        return Food(
+            location,
+            target_location=location,
+            scale=self._scale,
+            size=0,
+            target_size=self._scale // 3,
+            alive=True,
+            ready=False,
+        )
