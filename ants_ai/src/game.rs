@@ -518,25 +518,50 @@ impl Game {
 
     fn harvest_food(&mut self) {
         let food = self.map.food();
+        let mut ants_that_harvested_food: HashSet<(usize, usize)> = HashSet::new();
 
         for (row, col) in food {
-            let unique_player_ants_around_food = self
+            let ants_around_food: Vec<(usize, usize, usize)> = self
                 .map
                 .field_of_vision((row, col), self.food_radius2)
                 .into_iter()
                 .filter(|(entity, _, _)| entity.name() == "Ant")
-                .map(|(entity, _, _)| entity.player().unwrap())
-                .collect::<HashSet<usize>>();
+                .map(|(entity, row, col)| (row, col, entity.player().unwrap()))
+                .collect();
 
-            if unique_player_ants_around_food.is_empty() {
+            if ants_around_food.is_empty() {
                 continue;
             }
+
+            // Check to see if there is only one player around the food
+            let unique_player_ants_around_food: HashSet<usize> = ants_around_food
+                .iter()
+                .map(|(_, _, player)| *player)
+                .collect();
 
             // If there is only one player around the food, they consume it into their hive
             // Otherwise, it's simply removed from the map without being consumed by anyone
             if unique_player_ants_around_food.len() == 1 {
-                let player = unique_player_ants_around_food.iter().next().unwrap();
-                self.hive[*player] += 1;
+                let mut can_harvest = false;
+
+                // But first, check if the ants around the food already harvested this turn
+                for (row, col, player) in &ants_around_food {
+                    if ants_that_harvested_food.contains(&(*row, *col)) {
+                        continue;
+                    }
+
+                    // This ant can harvest the food
+                    self.hive[*player] += 1;
+                    ants_that_harvested_food.insert((*row, *col));
+                    can_harvest = true;
+                    break;
+                }
+
+                // No ants around the food could harvest it but since they all belong to
+                // the same player, we don't remove the food
+                if !can_harvest {
+                    continue;
+                }
             }
 
             self.map.remove(row, col);
@@ -1476,6 +1501,47 @@ mod tests {
         assert!(game.map.get(0, 0).is_none());
         assert!(game.map.get(2, 2).is_none());
         assert_eq!(game.hive, vec![0, 0]);
+    }
+
+    #[test]
+    fn when_harvesting_food_an_ant_can_only_consume_one_food_at_a_time() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m .*.
+            m *a*
+            m .*.";
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
+
+        game.harvest_food();
+
+        assert!(game.map.get(0, 1).is_none());
+        assert!(game.map.get(1, 0).is_some());
+        assert!(game.map.get(1, 2).is_some());
+        assert!(game.map.get(2, 1).is_some());
+        assert_eq!(game.hive, vec![1]);
+    }
+
+    #[test]
+    fn when_harvesting_food_two_distinct_ants_from_the_same_player_can_consume_food_at_the_same_time(
+    ) {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m .*a
+            m *a*
+            m .*.";
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 0, None);
+
+        game.harvest_food();
+
+        assert!(game.map.get(0, 1).is_none());
+        assert!(game.map.get(1, 0).is_none());
+        assert!(game.map.get(1, 2).is_some());
+        assert!(game.map.get(2, 1).is_some());
+        assert_eq!(game.hive, vec![2]);
     }
 
     #[test]
