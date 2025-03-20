@@ -34,37 +34,44 @@ pub trait ReplayLogger: Send + Sync {
 
     fn save(&self) {}
 
-    fn log_spawn_ant(&mut self, turn: usize, player: usize, location: (usize, usize)) {
-        self.log_spawn(turn, "Ant".to_string(), Some(player), location);
+    fn log_spawn_ant(&mut self, turn: usize, id: String, player: usize, location: (usize, usize)) {
+        self.log_spawn(turn, "Ant".to_string(), Some(id), Some(player), location);
     }
 
     fn log_spawn_food(&mut self, turn: usize, location: (usize, usize)) {
-        self.log_spawn(turn, "Food".to_string(), None, location);
+        self.log_spawn(turn, "Food".to_string(), None, None, location);
     }
 
-    fn log_remove_ant(&mut self, turn: usize, location: (usize, usize)) {
-        self.log_remove(turn, "Ant".to_string(), location);
+    fn log_remove_ant(&mut self, turn: usize, id: String) {
+        self.log_remove(turn, Some(id), "Ant".to_string(), None);
     }
 
-    fn log_move_ant(&mut self, turn: usize, location: (usize, usize), destination: (usize, usize)) {
+    fn log_move_ant(
+        &mut self,
+        turn: usize,
+        id: String,
+        location: (usize, usize),
+        destination: (usize, usize),
+    ) {
         self.log_event(
             turn,
             Event {
                 event_type: EventType::Move,
                 entity: "Ant".to_string(),
+                entity_id: Some(id),
                 player: None,
-                location,
+                location: Some(location),
                 destination: Some(destination),
             },
         );
     }
 
     fn log_remove_hill(&mut self, turn: usize, location: (usize, usize)) {
-        self.log_remove(turn, "Hill".to_string(), location);
+        self.log_remove(turn, None, "Hill".to_string(), Some(location));
     }
 
     fn log_remove_food(&mut self, turn: usize, location: (usize, usize)) {
-        self.log_remove(turn, "Food".to_string(), location);
+        self.log_remove(turn, None, "Food".to_string(), Some(location));
     }
 
     fn log_attack(&mut self, turn: usize, location: (usize, usize), destination: (usize, usize)) {
@@ -73,8 +80,9 @@ pub trait ReplayLogger: Send + Sync {
             Event {
                 event_type: EventType::Attack,
                 entity: "Ant".to_string(),
+                entity_id: None,
                 player: None,
-                location,
+                location: Some(location),
                 destination: Some(destination),
             },
         );
@@ -84,6 +92,7 @@ pub trait ReplayLogger: Send + Sync {
         &mut self,
         turn: usize,
         entity: String,
+        entity_id: Option<String>,
         player: Option<usize>,
         location: (usize, usize),
     ) {
@@ -92,19 +101,27 @@ pub trait ReplayLogger: Send + Sync {
             Event {
                 event_type: EventType::Spawn,
                 entity,
+                entity_id,
                 player,
-                location,
+                location: Some(location),
                 destination: None,
             },
         );
     }
 
-    fn log_remove(&mut self, turn: usize, entity: String, location: (usize, usize)) {
+    fn log_remove(
+        &mut self,
+        turn: usize,
+        id: Option<String>,
+        entity: String,
+        location: Option<(usize, usize)>,
+    ) {
         self.log_event(
             turn,
             Event {
                 event_type: EventType::Remove,
                 entity,
+                entity_id: id,
                 player: None,
                 location,
                 destination: None,
@@ -125,8 +142,9 @@ enum EventType {
 pub struct Event {
     event_type: EventType,
     entity: String,
+    entity_id: Option<String>,
     player: Option<usize>,
-    location: (usize, usize),
+    location: Option<(usize, usize)>,
     destination: Option<(usize, usize)>,
 }
 

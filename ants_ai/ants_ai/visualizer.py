@@ -35,6 +35,7 @@ class Event:
     Attributes:
         event_type (str): The type of event. "Spawn", "Remove", "Move" or "Attack".
         entity (str): The entity associated with the event. "Ant", "Food" or "Hill".
+        entity_id (str): The entity ID associated with the
         player (int): The player that owns the entity.
         location (tuple[int]): The location of the entity as a tuple of (row, col).
         destination (tuple[int]): The destination of the entity as a tuple of (row, col). Only used for "Move" and "Attack" events.
@@ -44,6 +45,8 @@ class Event:
     """The type of event. "Spawn", "Remove", "Move" or "Attack"."""
     entity: str
     """The entity associated with the event. "Ant", "Food" or "Hill"."""
+    entity_id: str
+    """The entity ID associated with the event."""
     player: int
     """The player that owns the entity."""
     location: tuple[int]
@@ -159,6 +162,7 @@ class Entity(ABC):
     """An abstract class representing an entity in the game.
 
     Attributes:
+        id: (str): The ID of the entity.
         location (tuple[int]): The location of the entity as a tuple of (row, col).
         target_location (tuple[int]): The target location of the entity as a tuple of (row, col).
         size (int): The size of the entity.
@@ -167,6 +171,8 @@ class Entity(ABC):
         ready (bool): Whether the entity is ready
     """
 
+    id: str
+    """The ID of the entity."""
     location: tuple[int]
     """The location of the entity as a tuple of (row, col)."""
     target_location: tuple[int]
@@ -351,7 +357,7 @@ class Visualizer:
         self._water: list[Water] = []
         self._hills: dict[tuple[int], Hill] = {}
         self._food: dict[tuple[int], Food] = {}
-        self._ants: dict[tuple[int], Ant] = {}
+        self._ants: dict[str, Ant] = {}
         self._parse_map()
 
         self._window_size = (self._width * self._scale, self._height * self._scale)
@@ -396,7 +402,6 @@ class Visualizer:
                     pygame.display.flip()
                     ready = self._all_ready()
 
-            self._sync_ant_locations()
             self._remove_dead_entities()
             turn += 1
 
@@ -465,7 +470,9 @@ class Visualizer:
         location = tuple(event.location)
 
         if event.entity == "Ant":
-            self._ants[location] = self._spawn_ant(location, event.player)
+            self._ants[event.entity_id] = self._spawn_ant(
+                event.entity_id, location, event.player
+            )
         elif event.entity == "Food":
             self._food[location] = self._spawn_food(location)
         else:
@@ -474,15 +481,15 @@ class Visualizer:
             )
 
     def _replay_remove(self, event: Event) -> None:
-        location = tuple(event.location)
-
         if event.entity == "Ant":
-            self._ants[location].target_size = 0
-            self._ants[location].alive = False
+            self._ants[event.entity_id].target_size = 0
+            self._ants[event.entity_id].alive = False
         elif event.entity == "Food":
+            location = tuple(event.location)
             self._food[location].target_size = 0
             self._food[location].alive = False
         elif event.entity == "Hill":
+            location = tuple(event.location)
             # When hills are removed they are "razed", not removed from the map
             self._hills[location].alive = False
         else:
@@ -491,19 +498,16 @@ class Visualizer:
             )
 
     def _replay_move(self, event: Event) -> None:
-        _from = tuple(event.location)
         to = tuple(event.destination)
-
-        ant = self._ants.get(_from)
+        ant = self._ants.get(event.entity_id)
 
         if not ant:
             raise RuntimeError(
-                f"No ant found at location {_from} to move in event: {event}."
+                f"No ant found with id {event.entity_id} to move in event: {event}."
             )
 
         # Move the ant to its new location
         ant.target_location = to
-        self._ants[to] = ant
 
     def replay_attack(self, event: Event) -> None:
         row, col = event.location
@@ -518,20 +522,11 @@ class Visualizer:
             2,
         )
 
-    def _sync_ant_locations(self) -> None:
-        # Make sure each ant is at the right location in the list
-        # This is needed to ensure ants are drawn in the correct cells
-        # after they finish moving
-        for location, ant in list(self._ants.items()):
-            if ant.location != location:
-                del self._ants[location]
-                self._ants[ant.location] = ant
-
     def _remove_dead_entities(self) -> None:
         # Remove dead ants
-        for location, ant in list(self._ants.items()):
+        for ant_id, ant in list(self._ants.items()):
             if not ant.alive:
-                del self._ants[location]
+                del self._ants[ant_id]
 
         # Remove consumed/destroyed food
         for location, food in list(self._food.items()):
@@ -571,35 +566,15 @@ class Visualizer:
                 location = (row, col)
 
                 # Max 10 players
-                if "a" <= char <= "j":
-                    player = ord(char) - ord("a")
-                    self._ants[location] = self._spawn_ant(location, player)
-                elif "A" <= char <= "J":
-                    player = ord(char) - ord("A")
-                    sprites = [
-                        self._hill_sprites[0].copy(),
-                        self._hill_sprites[1].copy(),
-                    ]
-                    self._hills[location] = Hill(
-                        location,
-                        target_location=location,
-                        scale=self._scale,
-                        size=self._scale,
-                        target_size=self._scale,
-                        alive=True,
-                        ready=True,
-                        player=player,
-                        sprites=sprites,
-                    )
-                    self._ants[location] = self._spawn_ant(location, player)
-                elif "0" <= char <= "9":
+                if "0" <= char <= "9":
                     player = int(char)
                     sprites = [
                         self._hill_sprites[0].copy(),
                         self._hill_sprites[1].copy(),
                     ]
                     self._hills[location] = Hill(
-                        location,
+                        id=f"Hill(p={player},loc=({location}))",
+                        location=location,
                         target_location=location,
                         scale=self._scale,
                         size=self._scale,
@@ -614,7 +589,8 @@ class Visualizer:
                 elif char == "%":
                     self._water.append(
                         Water(
-                            location,
+                            id=f"Water(loc=({location}))",
+                            location=location,
                             target_location=location,
                             scale=self._scale,
                             size=self._scale,
@@ -626,11 +602,12 @@ class Visualizer:
                     )
                 else:
                     raise ValueError(
-                        f"Unknown entity in map with character value: {char}"
+                        f"Invalid entity in map with character value: {char}"
                     )
 
-    def _spawn_ant(self, location: tuple[int], player: int) -> Ant:
+    def _spawn_ant(self, id: str, location: tuple[int], player: int) -> Ant:
         return Ant(
+            id,
             location,
             target_location=location,
             scale=self._scale,
@@ -643,7 +620,8 @@ class Visualizer:
 
     def _spawn_food(self, location: tuple[int]) -> Food:
         return Food(
-            location,
+            id=f"Food(loc=({location}))",
+            location=location,
             target_location=location,
             scale=self._scale,
             size=0,

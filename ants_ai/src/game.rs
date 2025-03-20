@@ -376,16 +376,11 @@ impl Game {
 
     fn spawn_ants(&mut self, ant_hills: Vec<(usize, usize, usize)>) {
         for (player, row, col) in ant_hills {
-            self.map.set(
-                row,
-                col,
-                Box::new(Ant::from_ant_hill(
-                    player,
-                    Box::new(Hill::new(player, true)),
-                )),
-            );
+            let ant = Ant::from_ant_hill(player, Box::new(Hill::new(player, true)));
+            let id = ant.id().to_string();
+            self.map.set(row, col, Box::new(ant));
             self.replay_logger
-                .log_spawn_ant(self.turn, player, (row, col));
+                .log_spawn_ant(self.turn, id, player, (row, col));
         }
     }
 
@@ -395,10 +390,10 @@ impl Game {
             .ants()
             .into_iter()
             .filter(|(ant, _, _)| !ant.alive().unwrap())
-            .map(|(_, row, col)| (row, col))
-            .collect::<Vec<(usize, usize)>>();
+            .map(|(ant, row, col)| (ant.id().to_string(), row, col))
+            .collect::<Vec<(String, usize, usize)>>();
 
-        for (row, col) in dead_ants {
+        for (id, row, col) in dead_ants {
             // If the ant was on a hill, replace the location with the hill, otherwise remove the ant
             if let Some(hill) = self.map.get(row, col).unwrap().on_ant_hill() {
                 self.map.set(
@@ -410,7 +405,7 @@ impl Game {
                 self.map.remove(row, col);
             }
 
-            self.replay_logger.log_remove_ant(self.turn, (row, col));
+            self.replay_logger.log_remove_ant(self.turn, id);
         }
     }
 
@@ -423,10 +418,20 @@ impl Game {
                 Direction::West => (action.row, action.col.saturating_sub(1)),
             };
 
+            let id = self
+                .map
+                .get(action.row, action.col)
+                .unwrap()
+                .id()
+                .to_string();
             self.map
                 .move_entity((action.row, action.col), (to_row, to_col));
-            self.replay_logger
-                .log_move_ant(self.turn, (action.row, action.col), (to_row, to_col));
+            self.replay_logger.log_move_ant(
+                self.turn,
+                id,
+                (action.row, action.col),
+                (to_row, to_col),
+            );
         }
     }
 
