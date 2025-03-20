@@ -339,6 +339,11 @@ impl Map {
     }
 
     fn is_valid_move(&self, from: (usize, usize), to: (usize, usize)) -> bool {
+        // If there is no movement, the move is invalid
+        if from == to {
+            return false;
+        }
+
         // If the coordinates are out of bounds, the move is invalid
         if from.0 >= self.height
             || from.1 >= self.width
@@ -894,5 +899,24 @@ mod tests {
 
         assert_eq!(map.get(2, 1).unwrap().name(), "Ant");
         assert!(!map.get(2, 1).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_moving_an_ant_to_the_same_cell_movement_is_ignored() {
+        let map = "\
+            rows 3
+            cols 3
+            players 1
+            m ...
+            m .a.
+            m ...";
+        let mut map = Map::parse(map);
+        let id = map.get(1, 1).unwrap().id().to_string();
+
+        map.move_entity((1, 1), (1, 1));
+
+        assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
+        assert_eq!(map.get(1, 1).unwrap().id(), id);
+        assert!(map.get(1, 1).unwrap().alive().unwrap());
     }
 }
