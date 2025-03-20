@@ -189,9 +189,9 @@ impl Map {
         fov
     }
 
-    pub fn move_entity(&mut self, from: (usize, usize), to: (usize, usize)) {
+    pub fn move_entity(&mut self, from: (usize, usize), to: (usize, usize)) -> bool {
         if !self.is_valid_move(from, to) {
-            return;
+            return false;
         }
 
         let collision = {
@@ -206,7 +206,8 @@ impl Map {
             self.get_mut(from.0, from.1).unwrap().set_alive(false);
             self.get_mut(to.0, to.1).unwrap().set_alive(false);
 
-            return;
+            // Even though the ants died from a collision, a movement still occurred
+            return true;
         }
 
         // Actually move the ant
@@ -250,6 +251,8 @@ impl Map {
         } else {
             self.remove(from.0, from.1);
         }
+
+        true
     }
 
     pub fn draw(&self, turn: usize, scores: &[usize], ants: &[usize], hive: &[usize]) {
@@ -700,10 +703,11 @@ mod tests {
             m .a.
             m ...";
         let mut map = Map::parse(map);
-        map.move_entity((1, 1), (0, 1));
+        let did_move = map.move_entity((1, 1), (0, 1));
 
         assert!(map.get(1, 1).is_none());
         assert_eq!(map.get(0, 1).unwrap().name(), "Ant");
+        assert!(did_move);
     }
 
     #[test]
@@ -716,10 +720,11 @@ mod tests {
             m .A.
             m ...";
         let mut map = Map::parse(map);
-        map.move_entity((1, 1), (0, 1));
+        let did_move = map.move_entity((1, 1), (0, 1));
 
         assert_eq!(map.get(0, 1).unwrap().name(), "Ant");
         assert_eq!(map.get(1, 1).unwrap().name(), "Hill");
+        assert!(did_move);
     }
 
     #[test]
@@ -732,7 +737,7 @@ mod tests {
             m .a.
             m .0.";
         let mut map = Map::parse(map);
-        map.move_entity((1, 1), (2, 1));
+        let did_move = map.move_entity((1, 1), (2, 1));
 
         assert!(map.get(1, 1).is_none());
         assert_eq!(map.get(2, 1).unwrap().name(), "Ant");
@@ -753,6 +758,7 @@ mod tests {
             .unwrap()
             .alive()
             .unwrap());
+        assert!(did_move);
     }
 
     #[test]
@@ -765,9 +771,10 @@ mod tests {
             m .a.
             m ...";
         let mut map = Map::parse(map);
-        map.move_entity((0, 1), (0, 2));
+        let did_move = map.move_entity((0, 1), (0, 2));
 
         assert!(map.get(0, 1).is_none());
+        assert!(!did_move);
     }
 
     #[test]
@@ -780,10 +787,11 @@ mod tests {
             m .a.
             m ...";
         let mut map = Map::parse(map);
-        map.move_entity((0, 0), (1, 0));
+        let did_move = map.move_entity((0, 0), (1, 0));
 
         assert_eq!(map.get(0, 0).unwrap().name(), "Water");
         assert!(map.get(1, 0).is_none());
+        assert!(!did_move);
     }
 
     #[test]
@@ -797,10 +805,11 @@ mod tests {
             m ...";
         let mut map = Map::parse(map);
         map.get_mut(1, 1).unwrap().set_alive(false);
-        map.move_entity((1, 1), (0, 1));
+        let did_move = map.move_entity((1, 1), (0, 1));
 
         assert!(map.get(0, 1).is_none());
         assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
+        assert!(!did_move);
     }
 
     #[test]
@@ -813,10 +822,11 @@ mod tests {
             m .a.
             m .%.";
         let mut map = Map::parse(map);
-        map.move_entity((1, 1), (2, 1));
+        let did_move = map.move_entity((1, 1), (2, 1));
 
         assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
         assert_eq!(map.get(2, 1).unwrap().name(), "Water");
+        assert!(!did_move);
     }
 
     #[test]
@@ -829,10 +839,11 @@ mod tests {
             m .a*
             m ...";
         let mut map = Map::parse(map);
-        map.move_entity((1, 1), (1, 2));
+        let did_move = map.move_entity((1, 1), (1, 2));
 
         assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
         assert_eq!(map.get(1, 2).unwrap().name(), "Food");
+        assert!(!did_move);
     }
 
     #[test]
@@ -845,9 +856,10 @@ mod tests {
             m ..a
             m ...";
         let mut map = Map::parse(map);
-        map.move_entity((1, 2), (1, 3));
+        let did_move = map.move_entity((1, 2), (1, 3));
 
         assert_eq!(map.get(1, 2).unwrap().name(), "Ant");
+        assert!(!did_move);
     }
 
     #[test]
@@ -860,9 +872,10 @@ mod tests {
             m ...
             m ..a";
         let mut map = Map::parse(map);
-        map.move_entity((2, 2), (3, 2));
+        let did_move = map.move_entity((2, 2), (3, 2));
 
         assert_eq!(map.get(2, 2).unwrap().name(), "Ant");
+        assert!(!did_move);
     }
 
     #[test]
@@ -875,10 +888,11 @@ mod tests {
             m .a.
             m .b.";
         let mut map = Map::parse(map);
-        map.move_entity((1, 1), (2, 1));
+        let did_move = map.move_entity((1, 1), (2, 1));
 
         assert!(!map.get(1, 1).unwrap().alive().unwrap());
         assert!(!map.get(2, 1).unwrap().alive().unwrap());
+        assert!(did_move);
     }
 
     #[test]
@@ -892,13 +906,14 @@ mod tests {
             m .a.";
         let mut map = Map::parse(map);
         map.get_mut(2, 1).unwrap().set_alive(false);
-        map.move_entity((1, 1), (2, 1));
+        let did_move = map.move_entity((1, 1), (2, 1));
 
         assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
         assert!(map.get(1, 1).unwrap().alive().unwrap());
 
         assert_eq!(map.get(2, 1).unwrap().name(), "Ant");
         assert!(!map.get(2, 1).unwrap().alive().unwrap());
+        assert!(!did_move);
     }
 
     #[test]
@@ -913,10 +928,11 @@ mod tests {
         let mut map = Map::parse(map);
         let id = map.get(1, 1).unwrap().id().to_string();
 
-        map.move_entity((1, 1), (1, 1));
+        let did_move = map.move_entity((1, 1), (1, 1));
 
         assert_eq!(map.get(1, 1).unwrap().name(), "Ant");
         assert_eq!(map.get(1, 1).unwrap().id(), id);
         assert!(map.get(1, 1).unwrap().alive().unwrap());
+        assert!(!did_move);
     }
 }

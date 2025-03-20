@@ -424,14 +424,19 @@ impl Game {
                 .unwrap()
                 .id()
                 .to_string();
-            self.map
+
+            let did_move = self
+                .map
                 .move_entity((action.row, action.col), (to_row, to_col));
-            self.replay_logger.log_move_ant(
-                self.turn,
-                id,
-                (action.row, action.col),
-                (to_row, to_col),
-            );
+
+            if did_move {
+                self.replay_logger.log_move_ant(
+                    self.turn,
+                    id,
+                    (action.row, action.col),
+                    (to_row, to_col),
+                );
+            }
         }
     }
 
