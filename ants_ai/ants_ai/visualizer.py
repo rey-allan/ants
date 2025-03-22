@@ -1,11 +1,11 @@
 import importlib.resources
 import json
-import math
 import os
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Self
 
 # Hide the annoying pygame support prompt
@@ -24,8 +24,21 @@ PLAYER_COLORS = {
     8: (214, 92, 214),
     9: (207, 175, 183),
 }
-UPDATE_SIZE_SPEED = 20
-UPDATE_MOVE_SPEED = 5
+UPDATE_SIZE_SPEED = 5
+UPDATE_MOVE_SPEED = 0.5
+
+
+class TurnPhase(Enum):
+    """An enumeration representing the different phases of a turn."""
+
+    Spawn = "Spawn"
+    Move = "Move"
+    Attack = "Attack"
+    Remove = "Remove"
+
+    def all() -> list[Self]:
+        """Returns a list of all the turn phases."""
+        return [phase for phase in TurnPhase]
 
 
 @dataclass
@@ -64,7 +77,7 @@ class Turn:
         ants (list[int]): The number of live ants per player.
         hive (list[int]): The number of ants in the hive per player.
         scores (list[int]): The scores of the players.
-        events (list[Event]): The list of events that occurred in the turn.
+        events (dict[TurnPhase, list[Event]]): A dictionary mapping turn phases to the events that occurred in that phase.
     """
 
     turn_number: int
@@ -75,8 +88,8 @@ class Turn:
     """The number of ants in the hive per player."""
     scores: list[int]
     """The scores of the players."""
-    events: list[Event]
-    """The list of events that occurred in the turn."""
+    events: dict[TurnPhase, list[Event]]
+    """A dictionary mapping turn phases to the events that occurred in that phase."""
 
     @classmethod
     def from_json(cls, dict: dict[str, Any]) -> Self:
@@ -87,7 +100,11 @@ class Turn:
         :return: The `Turn` object created from the JSON dictionary.
         :rtype: Self
         """
-        events = list(map(lambda event: Event(**event), dict["events"]))
+        # Group events by phase
+        events = defaultdict(list)
+        for event in dict["events"]:
+            phase = TurnPhase(event["event_type"])
+            events[phase].append(Event(**event))
 
         return cls(
             dict["turn"],
@@ -165,10 +182,10 @@ class Entity(ABC):
         id: (str): The ID of the entity.
         location (tuple[int]): The location of the entity as a tuple of (row, col).
         target_location (tuple[int]): The target location of the entity as a tuple of (row, col).
+        move_direction (int): The direction the entity is moving in as a 1 or -1.
         size (int): The size of the entity.
         target_size (int): The target size of the entity.
         alive (bool): Whether the entity is alive or not.
-        ready (bool): Whether the entity is ready
     """
 
     id: str
@@ -177,6 +194,8 @@ class Entity(ABC):
     """The location of the entity as a tuple of (row, col)."""
     target_location: tuple[int]
     """The target location of the entity as a tuple of (row, col)."""
+    move_direction: int
+    """The direction the entity is moving in as a 1, -1 or 0 (not moving)."""
     scale: int
     """The scale of the entity on the screen."""
     size: int
@@ -185,8 +204,6 @@ class Entity(ABC):
     """The target size of the entity."""
     alive: bool
     """Whether the entity is alive or not."""
-    ready: bool
-    """Whether the entity is ready or not."""
 
     @abstractmethod
     def draw(self, screen: pygame.Surface) -> None:
@@ -197,46 +214,62 @@ class Entity(ABC):
         """
         raise NotImplementedError
 
-    def update(self, dt: float) -> None:
+    def update(self, phase: int, dt: float) -> None:
         """Updates the entity.
 
+        :param phase: The current phase.
+        :type phase: int
         :param dt: The time since the last update.
         :type dt: float
         """
-        # Use `math.copysign` to get the sign of the difference between the target size and the current size
-        # This is needed to ensure that the size is updated in the correct direction (grow or shrink)
-        self.size += (
-            dt * UPDATE_SIZE_SPEED * math.copysign(1, self.target_size - self.size)
-        )
-        # Cap the size to 0 when shrinking and the target size when growing
-        self.size = (
-            max(0, self.size)
-            if self.target_size == 0
-            else min(self.target_size, self.size)
-        )
+        update_t = dt - phase
+        phase = TurnPhase.all()[phase]
 
-        # We do the same for the location
-        location_dt = dt * UPDATE_MOVE_SPEED
-        # Cap the update to 1 if it's larger since ants only move 1 cell at a time
-        location_dt = min(1, location_dt)
+        if phase in [TurnPhase.Spawn, TurnPhase.Remove]:
+            # Update the size
+            if self.size == self.target_size:
+                return
 
-        self.location = (
-            self.location[0]
-            + location_dt
-            * math.copysign(1, self.target_location[0] - self.location[0]),
-            self.location[1]
-            + location_dt
-            * math.copysign(1, self.target_location[1] - self.location[1]),
-        )
-        # Cap the location to the target location
-        self.location = (
-            min(self.target_location[0], self.location[0]),
-            min(self.target_location[1], self.location[1]),
-        )
+            size_update = (self.target_size - self.size) * update_t * UPDATE_SIZE_SPEED
+            self.size += size_update
 
-        self.ready = (
-            self.size == self.target_size and self.location == self.target_location
-        )
+            # Cap the size to 0 when shrinking and the target size when growing
+            self.size = (
+                max(0, self.size)
+                if self.target_size == 0
+                else min(self.target_size, self.size)
+            )
+        elif phase == TurnPhase.Move:
+            # Update the appropriate location
+            if self.location == self.target_location:
+                return
+
+            location_x_update = (
+                (self.target_location[0] - self.location[0])
+                * update_t
+                * UPDATE_MOVE_SPEED
+            )
+            location_y_update = (
+                (self.target_location[1] - self.location[1])
+                * update_t
+                * UPDATE_MOVE_SPEED
+            )
+            self.location = (
+                self.location[0] + location_x_update,
+                self.location[1] + location_y_update,
+            )
+
+            # Cap the location to the target location based on the direction
+            if self.move_direction == 1:
+                self.location = (
+                    min(self.target_location[0], self.location[0]),
+                    min(self.target_location[1], self.location[1]),
+                )
+            elif self.move_direction == -1:
+                self.location = (
+                    max(self.target_location[0], self.location[0]),
+                    max(self.target_location[1], self.location[1]),
+                )
 
 
 @dataclass
@@ -330,8 +363,8 @@ class Visualizer:
     :type replay_filename: str
     :param scale: The scale factor for the map when visualizing, defaults to 10.
     :type scale: int
-    :param speed: The speed of the visualization in FPS, defaults to 1.
-    :type speed: int
+    :param speed: The speed of the visualization, defaults to 1.0.
+    :type speed: float
     :param show_grid: Whether to show the grid lines on the map, defaults to False.
     :type show_grid: bool
     """
@@ -340,7 +373,7 @@ class Visualizer:
         self,
         replay_filename: str,
         scale: int = 10,
-        speed: int = 50,
+        speed: float = 1.0,
         show_grid: bool = False,
     ) -> None:
         pygame.init()
@@ -365,9 +398,17 @@ class Visualizer:
 
         self._screen = pygame.display.set_mode(self._window_size)
         self._clock = pygame.time.Clock()
+        # Simulation time
+        self._time = 0.0
+        # Per-turn time
+        self._turn_time = 0.0
         self._speed = speed
         self._show_grid = show_grid
-        self._dt = 0
+        self._turn_phases = TurnPhase.all()
+        self._replayed: dict[int, dict[TurnPhase, bool]] = {
+            turn: {phase: False for phase in self._turn_phases}
+            for turn in range(len(self._replay.turns))
+        }
 
     def run(self) -> None:
         """Runs the visualizer."""
@@ -375,37 +416,38 @@ class Visualizer:
         turn = 0
 
         while running:
+            dt = self._clock.tick(60) / 1000.0
+            self._time += dt * self._speed
+            # Clamp time to the replay duration
+            self._time = min(self._time, self._replay.turns[-1].turn_number)
+
+            # Track the per-turn time
+            self._turn_time = (self._time * len(self._turn_phases)) % len(
+                self._turn_phases
+            )
+
+            if self._time == self._replay.turns[-1].turn_number:
+                running = False
+
+            turn = int(self._time)
+            phase = self._turn_phases[int(self._turn_time)]
+
+            if not self._replayed[turn][phase]:
+                events = self._replay.turns[turn].events[phase]
+                self._do_replay(events)
+                self._replayed[turn][phase] = True
+
+            self._update_map(int(self._turn_time))
+
+            self._draw_map()
+            self._draw_grid()
+            pygame.display.flip()
+
+            self._remove_dead_entities()
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-
-            if turn >= len(self._replay.turns):
-                continue
-
-            # Aggregate all events for the current turn per type in a map
-            events_per_type = defaultdict(list)
-            for event in self._replay.turns[turn].events:
-                events_per_type[event.event_type].append(event)
-
-            # Loop through all events in the current turn in the phase order
-            for event_type in ["Move", "Attack", "Remove", "Spawn"]:
-                events = events_per_type[event_type]
-
-                self._do_replay(events)
-                ready = False
-
-                while not ready:
-                    self._dt = self._clock.tick(self._speed) / 1000
-                    self._update_map()
-                    self._draw_map()
-                    self._draw_grid()
-                    pygame.display.flip()
-                    ready = self._all_ready()
-
-            self._remove_dead_entities()
-            turn += 1
-
-        pygame.quit()
 
     def _draw_grid(self) -> None:
         if not self._show_grid:
@@ -431,25 +473,12 @@ class Visualizer:
         ]:
             entity.draw(self._screen)
 
-    def _update_map(self) -> None:
+    def _update_map(self, phase: int) -> None:
         for entity in [
-            *self._water,
-            *self._hills.values(),
             *self._food.values(),
             *self._ants.values(),
         ]:
-            entity.update(self._dt)
-
-    def _all_ready(self) -> bool:
-        return all(
-            entity.ready
-            for entity in [
-                *self._water,
-                *self._hills.values(),
-                *self._food.values(),
-                *self._ants.values(),
-            ]
-        )
+            entity.update(phase, self._turn_time)
 
     def _do_replay(self, events: list[Event]) -> None:
         for event in events:
@@ -460,7 +489,7 @@ class Visualizer:
             elif event.event_type == "Move":
                 self._replay_move(event)
             elif event.event_type == "Attack":
-                self.replay_attack(event)
+                self._replay_attack(event)
             else:
                 raise RuntimeError(
                     f"Invalid event type '{event.event_type}' in event {event}."
@@ -509,7 +538,15 @@ class Visualizer:
         # Move the ant to its new location
         ant.target_location = to
 
-    def replay_attack(self, event: Event) -> None:
+        # Determine the direction the ant is moving in
+        direction = 0
+        if ant.location[0] < to[0] or ant.location[1] < to[1]:
+            direction = 1
+        elif ant.location[0] > to[0] or ant.location[1] > to[1]:
+            direction = -1
+        ant.move_direction = direction
+
+    def _replay_attack(self, event: Event) -> None:
         row, col = event.location
         dest_row, dest_col = event.destination
 
@@ -576,11 +613,11 @@ class Visualizer:
                         id=f"Hill(p={player},loc=({location}))",
                         location=location,
                         target_location=location,
+                        move_direction=0,
                         scale=self._scale,
                         size=self._scale,
                         target_size=self._scale,
                         alive=True,
-                        ready=True,
                         player=player,
                         sprites=sprites,
                     )
@@ -592,11 +629,11 @@ class Visualizer:
                             id=f"Water(loc=({location}))",
                             location=location,
                             target_location=location,
+                            move_direction=0,
                             scale=self._scale,
                             size=self._scale,
                             target_size=self._scale,
                             alive=True,
-                            ready=True,
                             sprite=self._water_sprite,
                         )
                     )
@@ -610,11 +647,11 @@ class Visualizer:
             id,
             location,
             target_location=location,
+            move_direction=0,
             scale=self._scale,
             size=0,
             target_size=self._scale // 5,
             alive=True,
-            ready=False,
             player=player,
         )
 
@@ -623,9 +660,9 @@ class Visualizer:
             id=f"Food(loc=({location}))",
             location=location,
             target_location=location,
+            move_direction=0,
             scale=self._scale,
             size=0,
             target_size=self._scale // 3,
             alive=True,
-            ready=False,
         )
