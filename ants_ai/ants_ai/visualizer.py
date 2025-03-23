@@ -415,8 +415,6 @@ class Visualizer:
     :type replay_filename: str
     :param scale: The scale factor for the map when visualizing, defaults to 10.
     :type scale: int
-    :param speed: The speed of the visualization, defaults to 1.0.
-    :type speed: float
     :param show_grid: Whether to show the grid lines on the map, defaults to False.
     :type show_grid: bool
     """
@@ -425,7 +423,6 @@ class Visualizer:
         self,
         replay_filename: str,
         scale: int = 10,
-        speed: float = 1.0,
         show_grid: bool = False,
     ) -> None:
         pygame.init()
@@ -455,7 +452,6 @@ class Visualizer:
         self._time = 0.0
         # Per-turn time
         self._turn_time = 0.0
-        self._speed = speed
         self._show_grid = show_grid
         self._turn_phases = TurnPhase.all()
         self._replayed: dict[int, dict[TurnPhase, bool]] = {
@@ -476,7 +472,7 @@ class Visualizer:
                 continue
 
             dt = self._clock.tick(60) / 1000.0
-            self._time += dt * self._speed
+            self._time += dt
 
             # Track the per-turn time
             self._turn_time = (self._time * len(self._turn_phases)) % len(
