@@ -438,9 +438,6 @@ class Visualizer:
                 self._turn_phases
             )
 
-            if self._time == self._replay.turns[-1].turn_number:
-                running = False
-
             turn = int(self._time)
             phase_index = int(self._turn_time)
             phase = self._turn_phases[phase_index]
