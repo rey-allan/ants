@@ -186,19 +186,19 @@ class Entity(ABC):
         alive (bool): Whether the entity is alive or not.
     """
 
-    id: str
+    id: str = ""
     """The ID of the entity."""
-    location: tuple[int]
+    location: tuple[int] = (-1, -1)
     """The location of the entity as a tuple of (row, col)."""
-    target_location: tuple[int]
+    target_location: tuple[int] = (-1, -1)
     """The target location of the entity as a tuple of (row, col)."""
-    scale: int
+    scale: int = 0
     """The scale of the entity on the screen."""
-    size: int
+    size: int = 0
     """The size of the entity."""
-    target_size: int
+    target_size: int = 0
     """The target size of the entity."""
-    alive: bool
+    alive: bool = False
     """Whether the entity is alive or not."""
 
     @abstractmethod
@@ -240,47 +240,56 @@ class Entity(ABC):
             if abs(self.size - self.target_size) <= UPDATE_EPSILON:
                 self.size = self.target_size
         elif phase == TurnPhase.Move:
-            if self.location == self.target_location:
-                return
+            self.location = self._update_location(
+                self.location, self.target_location, update_t
+            )
 
-            current_row, current_col = self.location
-            target_row, target_col = self.target_location
+    def _update_location(
+        self,
+        location: tuple[int],
+        target_location: tuple[int],
+        update_t: float,
+    ) -> tuple[int]:
+        if location == target_location:
+            return location
 
-            # Update the appropriate location
-            if target_row != current_row:
-                row_diff = target_row - current_row
-                row_update = row_diff * update_t
-                new_row = current_row + row_update
+        current_row, current_col = location
+        target_row, target_col = target_location
 
-                # Cap the new row to the target row based on the direction
-                new_row = (
-                    min(target_row, new_row)
-                    if row_diff > 0
-                    else max(target_row, new_row)
-                )
+        # Update the appropriate location
+        if target_row != current_row:
+            row_diff = target_row - current_row
+            row_update = row_diff * update_t
+            new_row = current_row + row_update
 
-                # If the new row is within UPDATE_EPSILON of the target row, snap to the target row
-                if abs(new_row - target_row) <= UPDATE_EPSILON:
-                    new_row = target_row
+            # Cap the new row to the target row based on the direction
+            new_row = (
+                min(target_row, new_row) if row_diff > 0 else max(target_row, new_row)
+            )
 
-                self.location = (new_row, current_col)
-            elif target_col != current_col:
-                col_diff = target_col - current_col
-                col_update = col_diff * update_t
-                new_col = current_col + col_update
+            # If the new row is within UPDATE_EPSILON of the target row, snap to the target row
+            if abs(new_row - target_row) <= UPDATE_EPSILON:
+                new_row = target_row
 
-                # Cap the new col to the target col based on the direction
-                new_col = (
-                    min(target_col, new_col)
-                    if col_diff > 0
-                    else max(target_col, new_col)
-                )
+            current_row = new_row
 
-                # If the new col is within UPDATE_MOVE_EPSILON of the target col, snap to the target col
-                if abs(new_col - target_col) <= UPDATE_EPSILON:
-                    new_col = target_col
+        if target_col != current_col:
+            col_diff = target_col - current_col
+            col_update = col_diff * update_t
+            new_col = current_col + col_update
 
-                self.location = (current_row, new_col)
+            # Cap the new col to the target col based on the direction
+            new_col = (
+                min(target_col, new_col) if col_diff > 0 else max(target_col, new_col)
+            )
+
+            # If the new col is within UPDATE_MOVE_EPSILON of the target col, snap to the target col
+            if abs(new_col - target_col) <= UPDATE_EPSILON:
+                new_col = target_col
+
+            current_col = new_col
+
+        return current_row, current_col
 
 
 @dataclass
@@ -291,7 +300,7 @@ class Ant(Entity):
         player (int): The player that owns the ant.
     """
 
-    player: int
+    player: int = -1
     """The player that owns the ant."""
 
     def draw(self, screen: pygame.Surface) -> None:
@@ -327,9 +336,9 @@ class Hill(Entity):
         sprites (tuple[pygame.Surface]): The sprites for the hill (alive and razed).
     """
 
-    player: int
+    player: int = -1
     """The player that owns the hill."""
-    sprites: tuple[pygame.Surface]
+    sprites: tuple[pygame.Surface] = (None, None)
     """The sprites for the hill (alive and razed)."""
 
     def draw(self, screen: pygame.Surface) -> None:
@@ -358,13 +367,45 @@ class Water(Entity):
         sprite: (pygame.Surface): The sprite to use for the water.
     """
 
-    sprite: pygame.Surface
+    sprite: pygame.Surface = None
     """The sprite to use for the water."""
 
     def draw(self, screen: pygame.Surface) -> None:
         row, col = self.location
         sprite = pygame.transform.scale(self.sprite, (self.scale, self.scale))
         screen.blit(sprite, (col * self.scale, row * self.scale))
+
+
+@dataclass
+class Attack(Entity):
+    """A class representing an attack in the game.
+
+    Attributes:
+        current_target_location (tuple[int]): The current target location of the attack that will be updated towards the target location.
+    """
+
+    current_target_location: tuple[int] = (-1, -1)
+    """The current target location of the attack that will be updated towards the target location."""
+
+    def draw(self, screen: pygame.Surface) -> None:
+        row, col = self.location
+        dest_row, dest_col = self.current_target_location
+        # Offset to center the line
+        offset = self.scale // 2
+        pygame.draw.line(
+            screen,
+            (255, 255, 255),
+            (col * self.scale + offset, row * self.scale + offset),
+            (dest_col * self.scale + offset, dest_row * self.scale + offset),
+            2,
+        )
+
+    def update(self, phase, dt):
+        # Update the current _target_ location towards the target location
+        update_t = dt - phase
+        self.current_target_location = self._update_location(
+            self.current_target_location, self.target_location, update_t
+        )
 
 
 class Visualizer:
@@ -402,6 +443,7 @@ class Visualizer:
         self._hills: dict[tuple[int], Hill] = {}
         self._food: dict[tuple[int], Food] = {}
         self._ants: dict[str, Ant] = {}
+        self._attacks: list[Attack] = []
         self._parse_map()
 
         self._window_size = (self._width * self._scale, self._height * self._scale)
@@ -424,14 +466,17 @@ class Visualizer:
     def run(self) -> None:
         """Runs the visualizer."""
         running = True
+        finished = False
         turn = 0
         prev_turn = 0
 
         while running:
+            if finished:
+                running = not self._should_quit()
+                continue
+
             dt = self._clock.tick(60) / 1000.0
             self._time += dt * self._speed
-            # Clamp time to the replay duration
-            self._time = min(self._time, self._replay.turns[-1].turn_number)
 
             # Track the per-turn time
             self._turn_time = (self._time * len(self._turn_phases)) % len(
@@ -439,13 +484,20 @@ class Visualizer:
             )
 
             turn = int(self._time)
+
+            if turn != prev_turn:
+                # Remove dead entities and attack lines at the start of each turn
+                self._remove_dead_entities()
+                self._attacks.clear()
+                prev_turn = turn
+
+                # Check if the simulation has finished
+                finished = turn >= len(self._replay.turns)
+                if finished:
+                    continue
+
             phase_index = int(self._turn_time)
             phase = self._turn_phases[phase_index]
-
-            # Remove dead entities at the start of a new turn
-            if turn != prev_turn:
-                self._remove_dead_entities()
-                prev_turn = turn
 
             if not self._replayed[turn][phase]:
                 events = self._replay.turns[turn].events[phase]
@@ -458,9 +510,13 @@ class Visualizer:
             self._draw_grid()
             pygame.display.flip()
 
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
+            running = not self._should_quit()
+
+    def _should_quit(self) -> bool:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return True
+        return False
 
     def _draw_grid(self) -> None:
         if not self._show_grid:
@@ -483,6 +539,7 @@ class Visualizer:
             *self._hills.values(),
             *self._food.values(),
             *self._ants.values(),
+            *self._attacks,
         ]:
             entity.draw(self._screen)
 
@@ -490,6 +547,7 @@ class Visualizer:
         for entity in [
             *self._food.values(),
             *self._ants.values(),
+            *self._attacks,
         ]:
             entity.update(phase, self._turn_time)
 
@@ -552,16 +610,13 @@ class Visualizer:
         ant.target_location = to
 
     def _replay_attack(self, event: Event) -> None:
-        row, col = event.location
-        dest_row, dest_col = event.destination
-
-        # Draw a line from the attacking ant to the target
-        pygame.draw.line(
-            self._screen,
-            (0, 0, 0),
-            (col * self._scale, row * self._scale),
-            (dest_col * self._scale, dest_row * self._scale),
-            2,
+        self._attacks.append(
+            Attack(
+                location=tuple(event.location),
+                target_location=tuple(event.destination),
+                current_target_location=tuple(event.location),
+                scale=self._scale,
+            )
         )
 
     def _remove_dead_entities(self) -> None:
@@ -617,10 +672,7 @@ class Visualizer:
                     self._hills[location] = Hill(
                         id=f"Hill(p={player},loc=({location}))",
                         location=location,
-                        target_location=location,
                         scale=self._scale,
-                        size=self._scale,
-                        target_size=self._scale,
                         alive=True,
                         player=player,
                         sprites=sprites,
@@ -630,12 +682,8 @@ class Visualizer:
                 elif char == "%":
                     self._water.append(
                         Water(
-                            id=f"Water(loc=({location}))",
                             location=location,
-                            target_location=location,
                             scale=self._scale,
-                            size=self._scale,
-                            target_size=self._scale,
                             alive=True,
                             sprite=self._water_sprite,
                         )
