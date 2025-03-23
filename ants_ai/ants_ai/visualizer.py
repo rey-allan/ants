@@ -425,6 +425,7 @@ class Visualizer:
         """Runs the visualizer."""
         running = True
         turn = 0
+        prev_turn = 0
 
         while running:
             dt = self._clock.tick(60) / 1000.0
@@ -441,20 +442,24 @@ class Visualizer:
                 running = False
 
             turn = int(self._time)
-            phase = self._turn_phases[int(self._turn_time)]
+            phase_index = int(self._turn_time)
+            phase = self._turn_phases[phase_index]
+
+            # Remove dead entities at the start of a new turn
+            if turn != prev_turn:
+                self._remove_dead_entities()
+                prev_turn = turn
 
             if not self._replayed[turn][phase]:
                 events = self._replay.turns[turn].events[phase]
                 self._do_replay(events)
                 self._replayed[turn][phase] = True
 
-            self._update_map(int(self._turn_time))
+            self._update_map(phase_index)
 
             self._draw_map()
             self._draw_grid()
             pygame.display.flip()
-
-            self._remove_dead_entities()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
