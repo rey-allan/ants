@@ -24,8 +24,7 @@ PLAYER_COLORS = {
     8: (214, 92, 214),
     9: (207, 175, 183),
 }
-UPDATE_SIZE_SPEED = 5
-UPDATE_MOVE_SPEED = 0.5
+UPDATE_EPSILON = 0.001
 
 
 class TurnPhase(Enum):
@@ -182,7 +181,6 @@ class Entity(ABC):
         id: (str): The ID of the entity.
         location (tuple[int]): The location of the entity as a tuple of (row, col).
         target_location (tuple[int]): The target location of the entity as a tuple of (row, col).
-        move_direction (int): The direction the entity is moving in as a 1 or -1.
         size (int): The size of the entity.
         target_size (int): The target size of the entity.
         alive (bool): Whether the entity is alive or not.
@@ -194,8 +192,6 @@ class Entity(ABC):
     """The location of the entity as a tuple of (row, col)."""
     target_location: tuple[int]
     """The target location of the entity as a tuple of (row, col)."""
-    move_direction: int
-    """The direction the entity is moving in as a 1, -1 or 0 (not moving)."""
     scale: int
     """The scale of the entity on the screen."""
     size: int
@@ -230,7 +226,7 @@ class Entity(ABC):
             if self.size == self.target_size:
                 return
 
-            size_update = (self.target_size - self.size) * update_t * UPDATE_SIZE_SPEED
+            size_update = (self.target_size - self.size) * update_t
             self.size += size_update
 
             # Cap the size to 0 when shrinking and the target size when growing
@@ -239,37 +235,52 @@ class Entity(ABC):
                 if self.target_size == 0
                 else min(self.target_size, self.size)
             )
+
+            # If the size is within UPDATE_EPSILON of the target size, snap to the target size
+            if abs(self.size - self.target_size) <= UPDATE_EPSILON:
+                self.size = self.target_size
         elif phase == TurnPhase.Move:
-            # Update the appropriate location
             if self.location == self.target_location:
                 return
 
-            location_x_update = (
-                (self.target_location[0] - self.location[0])
-                * update_t
-                * UPDATE_MOVE_SPEED
-            )
-            location_y_update = (
-                (self.target_location[1] - self.location[1])
-                * update_t
-                * UPDATE_MOVE_SPEED
-            )
-            self.location = (
-                self.location[0] + location_x_update,
-                self.location[1] + location_y_update,
-            )
+            current_row, current_col = self.location
+            target_row, target_col = self.target_location
 
-            # Cap the location to the target location based on the direction
-            if self.move_direction == 1:
-                self.location = (
-                    min(self.target_location[0], self.location[0]),
-                    min(self.target_location[1], self.location[1]),
+            # Update the appropriate location
+            if target_row != current_row:
+                row_diff = target_row - current_row
+                row_update = row_diff * update_t
+                new_row = current_row + row_update
+
+                # Cap the new row to the target row based on the direction
+                new_row = (
+                    min(target_row, new_row)
+                    if row_diff > 0
+                    else max(target_row, new_row)
                 )
-            elif self.move_direction == -1:
-                self.location = (
-                    max(self.target_location[0], self.location[0]),
-                    max(self.target_location[1], self.location[1]),
+
+                # If the new row is within UPDATE_EPSILON of the target row, snap to the target row
+                if abs(new_row - target_row) <= UPDATE_EPSILON:
+                    new_row = target_row
+
+                self.location = (new_row, current_col)
+            elif target_col != current_col:
+                col_diff = target_col - current_col
+                col_update = col_diff * update_t
+                new_col = current_col + col_update
+
+                # Cap the new col to the target col based on the direction
+                new_col = (
+                    min(target_col, new_col)
+                    if col_diff > 0
+                    else max(target_col, new_col)
                 )
+
+                # If the new col is within UPDATE_MOVE_EPSILON of the target col, snap to the target col
+                if abs(new_col - target_col) <= UPDATE_EPSILON:
+                    new_col = target_col
+
+                self.location = (current_row, new_col)
 
 
 @dataclass
@@ -538,14 +549,6 @@ class Visualizer:
         # Move the ant to its new location
         ant.target_location = to
 
-        # Determine the direction the ant is moving in
-        direction = 0
-        if ant.location[0] < to[0] or ant.location[1] < to[1]:
-            direction = 1
-        elif ant.location[0] > to[0] or ant.location[1] > to[1]:
-            direction = -1
-        ant.move_direction = direction
-
     def _replay_attack(self, event: Event) -> None:
         row, col = event.location
         dest_row, dest_col = event.destination
@@ -613,7 +616,6 @@ class Visualizer:
                         id=f"Hill(p={player},loc=({location}))",
                         location=location,
                         target_location=location,
-                        move_direction=0,
                         scale=self._scale,
                         size=self._scale,
                         target_size=self._scale,
@@ -629,7 +631,6 @@ class Visualizer:
                             id=f"Water(loc=({location}))",
                             location=location,
                             target_location=location,
-                            move_direction=0,
                             scale=self._scale,
                             size=self._scale,
                             target_size=self._scale,
@@ -647,7 +648,6 @@ class Visualizer:
             id,
             location,
             target_location=location,
-            move_direction=0,
             scale=self._scale,
             size=0,
             target_size=self._scale // 5,
@@ -660,7 +660,6 @@ class Visualizer:
             id=f"Food(loc=({location}))",
             location=location,
             target_location=location,
-            move_direction=0,
             scale=self._scale,
             size=0,
             target_size=self._scale // 3,
