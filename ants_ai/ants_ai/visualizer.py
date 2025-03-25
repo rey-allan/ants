@@ -181,6 +181,7 @@ class Entity(ABC):
         id: (str): The ID of the entity.
         location (tuple[int]): The location of the entity as a tuple of (row, col).
         target_location (tuple[int]): The target location of the entity as a tuple of (row, col).
+        scale (int): The scale of the entity on the screen.
         size (int): The size of the entity.
         target_size (int): The target size of the entity.
         alive (bool): Whether the entity is alive or not.
@@ -443,15 +444,30 @@ class Visualizer:
         self._attacks: list[Attack] = []
         self._parse_map()
 
-        self._window_size = (self._width * self._scale, self._height * self._scale)
         self._land_color = (120, 89, 58)
 
+        self._game_size = (self._width * self._scale, self._height * self._scale)
+        self._info_size = (self._game_size[0], int(self._game_size[1] * 0.12))
+        self._window_size = (
+            self._game_size[0],
+            self._game_size[1] + self._info_size[1],
+        )
+
         self._screen = pygame.display.set_mode(self._window_size)
+        self._game_screen = pygame.Surface(self._game_size)
+        self._info_screen = pygame.Surface(self._info_size)
+
+        with importlib.resources.path(
+            "ants_ai.assets", "RobotoMono-Regular.ttf"
+        ) as font_path:
+            self._font = pygame.font.Font(str(font_path), int(0.8 * self._scale))
+
         self._clock = pygame.time.Clock()
         # Simulation time
         self._time = 0.0
         # Per-turn time
         self._turn_time = 0.0
+
         self._show_grid = show_grid
         self._turn_phases = TurnPhase.all()
         self._replayed: dict[int, dict[TurnPhase, bool]] = {
@@ -502,8 +518,14 @@ class Visualizer:
 
             self._update_map(phase_index)
 
-            self._draw_map()
+            self._draw_info(turn, self._replay.turns[-1].turn_number)
             self._draw_grid()
+            self._draw_map()
+
+            # Draw the full screen as a combination of the game and info surfaces
+            self._screen.blit(self._info_screen, (0, 0))
+            self._screen.blit(self._game_screen, (0, self._info_size[1]))
+
             pygame.display.flip()
 
             running = not self._should_quit()
@@ -513,6 +535,119 @@ class Visualizer:
             if event.type == pygame.QUIT:
                 return True
         return False
+
+    def _draw_info(self, turn: int, last_turn: int) -> None:
+        self._info_screen.fill((0, 0, 0))
+        width, _ = self._info_size
+
+        # Draw number of players
+        _, players_text_height = self._draw_text(
+            f"Players: {self._replay.players}", color=(255, 255, 255), location=(10, 10)
+        )
+
+        # Draw the turn number
+        turn_text = f"Turn: {turn} / {last_turn}"
+        # Center the turn number in the middle of the info surface
+        turn_text_location = (width // 2 - self._font.size(turn_text)[0] // 2, 10)
+        self._draw_text(turn_text, color=(255, 255, 255), location=turn_text_location)
+
+        live_ants_text_width = self._font.size("Live ants: ")[0]
+        scores_text_width = self._font.size("Scores: ")[0]
+        hive_text_width = self._font.size("Hive: ")[0]
+
+        # Draw the player scores as a colored bar proportional to the score
+        self._draw_players_bar(
+            label="Scores: ",
+            label_location=(10, 10 + players_text_height),
+            data=self._replay.turns[turn].scores,
+            # Align it with the "Live ants" bar
+            offset_x=10 + live_ants_text_width - scores_text_width,
+        )
+
+        # Draw the number of live ants as a colored bar proportional to the number of ants
+        self._draw_players_bar(
+            label="Live ants: ",
+            label_location=(10, 10 + players_text_height * 2),
+            data=self._replay.turns[turn].ants,
+            offset_x=10,
+        )
+
+        # Draw the number of ants in the hive as a colored bar proportional to the number of ants
+        self._draw_players_bar(
+            label="Hive: ",
+            label_location=(10, 10 + players_text_height * 3),
+            data=self._replay.turns[turn].hive,
+            # Align it with the "Live ants" bar
+            offset_x=10 + live_ants_text_width - hive_text_width,
+        )
+
+    def _draw_text(
+        self, text: str, color: tuple[int], location: tuple[int]
+    ) -> tuple[int]:
+        self._info_screen.blit(
+            self._font.render(text, True, color),
+            location,
+        )
+
+        return self._font.size(text)
+
+    def _draw_players_bar(
+        self,
+        label: str,
+        label_location: tuple[int],
+        data: list[int],
+        offset_x: int,
+    ) -> None:
+        label_width, label_height = self._draw_text(
+            label, color=(255, 255, 255), location=label_location
+        )
+
+        bar_width = self._info_size[0] - offset_x - label_width
+        bar_height = label_height
+
+        total = sum(data)
+        current_offset_x = offset_x + label_width
+        offset_y = label_location[1]
+
+        # If there is no data to draw, draw a "0" in the center
+        if total == 0:
+            self._draw_text(
+                "0",
+                color=(255, 255, 255),
+                location=(current_offset_x + bar_width // 2, offset_y),
+            )
+            return
+
+        for i, value in enumerate(data):
+            # Draw a bar proportional to the value
+            portion = value / total if total > 0 else 0
+            color = PLAYER_COLORS[i]
+            width = int(portion * bar_width)
+            rect = (
+                current_offset_x,
+                offset_y,
+                width,
+                bar_height,
+            )
+            pygame.draw.rect(self._info_screen, color, rect)
+
+            # Draw the value text in the center of the bar
+            value_text = f"{value}"
+            self._draw_text(
+                value_text,
+                color=(0, 0, 0),
+                location=(current_offset_x + width // 2, offset_y),
+            )
+
+            current_offset_x += width
+
+        # Draw a border around the bar
+        pygame.draw.rect(
+            self._info_screen,
+            (255, 255, 255),
+            (offset_x + label_width, offset_y, bar_width, bar_height),
+            2,
+        )
 
     def _draw_grid(self) -> None:
         if not self._show_grid:
@@ -526,10 +661,10 @@ class Visualizer:
                     self._scale,
                     self._scale,
                 )
-                pygame.draw.rect(self._screen, (0, 0, 0), rect, 1)
+                pygame.draw.rect(self._game_screen, (0, 0, 0), rect, 1)
 
     def _draw_map(self) -> None:
-        self._screen.fill(self._land_color)
+        self._game_screen.fill(self._land_color)
         for entity in [
             *self._water,
             *self._hills.values(),
@@ -537,7 +672,7 @@ class Visualizer:
             *self._ants.values(),
             *self._attacks,
         ]:
-            entity.draw(self._screen)
+            entity.draw(self._game_screen)
 
     def _update_map(self, phase: int) -> None:
         for entity in [
