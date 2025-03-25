@@ -169,8 +169,21 @@ class Replay:
             dict["players"],
             _map,
             turns,
-            dict["finished_reason"],
+            cls._parse_finished_reason(dict["finished_reason"]),
         )
+
+    @classmethod
+    def _parse_finished_reason(cls, finished_reason: str) -> str:
+        if finished_reason == "LoneSurvivor":
+            return "Lone Survivor (1 player left)"
+        elif finished_reason == "RankStabilized":
+            return "Rank Stabilized (Winner determined)"
+        elif finished_reason == "TooMuchFood":
+            return "Too Much Food"
+        elif finished_reason == "TurnLimitReached":
+            return "Max Turns Reached"
+        else:
+            return finished_reason
 
 
 @dataclass
@@ -506,6 +519,10 @@ class Visualizer:
                 # Check if the simulation has finished
                 finished = turn >= len(self._replay.turns)
                 if finished:
+                    self._draw_endgame(self._replay.finished_reason)
+                    # Re-draw the game surface to show the endgame message
+                    self._screen.blit(self._game_screen, (0, self._info_size[1]))
+                    pygame.display.flip()
                     continue
 
             phase_index = int(self._turn_time)
@@ -542,14 +559,22 @@ class Visualizer:
 
         # Draw number of players
         _, players_text_height = self._draw_text(
-            f"Players: {self._replay.players}", color=(255, 255, 255), location=(10, 10)
+            f"Players: {self._replay.players}",
+            color=(255, 255, 255),
+            location=(10, 10),
+            surface=self._info_screen,
         )
 
         # Draw the turn number
         turn_text = f"Turn: {turn} / {last_turn}"
         # Center the turn number in the middle of the info surface
         turn_text_location = (width // 2 - self._font.size(turn_text)[0] // 2, 10)
-        self._draw_text(turn_text, color=(255, 255, 255), location=turn_text_location)
+        self._draw_text(
+            turn_text,
+            color=(255, 255, 255),
+            location=turn_text_location,
+            surface=self._info_screen,
+        )
 
         live_ants_text_width = self._font.size("Live ants: ")[0]
         scores_text_width = self._font.size("Scores: ")[0]
@@ -581,16 +606,6 @@ class Visualizer:
             offset_x=10 + live_ants_text_width - hive_text_width,
         )
 
-    def _draw_text(
-        self, text: str, color: tuple[int], location: tuple[int]
-    ) -> tuple[int]:
-        self._info_screen.blit(
-            self._font.render(text, True, color),
-            location,
-        )
-
-        return self._font.size(text)
-
     def _draw_players_bar(
         self,
         label: str,
@@ -599,7 +614,10 @@ class Visualizer:
         offset_x: int,
     ) -> None:
         label_width, label_height = self._draw_text(
-            label, color=(255, 255, 255), location=label_location
+            label,
+            color=(255, 255, 255),
+            location=label_location,
+            surface=self._info_screen,
         )
 
         bar_width = self._info_size[0] - offset_x - label_width
@@ -615,6 +633,7 @@ class Visualizer:
                 "0",
                 color=(255, 255, 255),
                 location=(current_offset_x + bar_width // 2, offset_y),
+                surface=self._info_screen,
             )
             return
 
@@ -637,6 +656,7 @@ class Visualizer:
                 value_text,
                 color=(0, 0, 0),
                 location=(current_offset_x + width // 2, offset_y),
+                surface=self._info_screen,
             )
 
             current_offset_x += width
@@ -673,6 +693,32 @@ class Visualizer:
             *self._attacks,
         ]:
             entity.draw(self._game_screen)
+
+    def _draw_endgame(self, finished_reason: str) -> None:
+        # Draw the endgame in the center of the game surface
+        text = f"Game Over: {finished_reason}"
+        text_width, text_height = self._font.size(text)
+        location = (
+            self._game_size[0] // 2 - text_width // 2,
+            self._game_size[1] // 2 - text_height // 2,
+        )
+        self._draw_text(
+            text, color=(255, 255, 255), location=location, surface=self._game_screen
+        )
+
+    def _draw_text(
+        self,
+        text: str,
+        color: tuple[int],
+        location: tuple[int],
+        surface: pygame.Surface,
+    ) -> tuple[int]:
+        surface.blit(
+            self._font.render(text, True, color),
+            location,
+        )
+
+        return self._font.size(text)
 
     def _update_map(self, phase: int) -> None:
         for entity in [
