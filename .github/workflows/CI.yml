@@ -3,7 +3,7 @@
 #
 #    maturin generate-ci github
 #
-name: CI
+name: Build and publish ants_ai
 
 on:
   push:
@@ -12,11 +12,17 @@ on:
       - master
     tags:
       - '*'
+    paths:
+      - ants_ai/**
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    working-directory: ants_ai
 
 jobs:
   linux:
