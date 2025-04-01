@@ -4,6 +4,15 @@ build-backend = "maturin"
 
 [project]
 name = "ants_ai"
+description = "Recreating Google's Ants AI Challenge for AI research."
+authors = [
+    {name = "Allan Reyes", email = "allan.rexo@gmail.com"}
+]
+maintainers = [
+    {name = "Allan Reyes", email = "allan.rexo@gmail.com"}
+]
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
@@ -14,6 +23,11 @@ dynamic = ["version"]
 dependencies = [
     "pygame",
 ]
+
+[project.urls]
+Homepage = "https://github.com/rey-allan/ants"
+Repository = "https://github.com/rey-allan/ants"
+Issues = "https://github.com/rey-allan/ants/issues"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
