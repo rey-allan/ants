@@ -165,4 +165,4 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         env:
           MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: maturin upload --non-interactive --skip-existing wheels-*/*
+        run: maturin upload --non-interactive --skip-existing ../wheels-*/*
