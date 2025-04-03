@@ -4,6 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ants_ai"
+version = "1.0.1"
 description = "Recreating Google's Ants AI Challenge for AI research."
 authors = [
     {name = "Allan Reyes", email = "allan.rexo@gmail.com"}
@@ -19,7 +20,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dynamic = ["version"]
 dependencies = [
     "pygame",
 ]
