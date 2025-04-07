@@ -208,6 +208,16 @@ impl Game {
         }
     }
 
+    /// Returns the width of the map.
+    pub fn width(&self) -> usize {
+        self.map.width()
+    }
+
+    /// Returns the height of the map.
+    pub fn height(&self) -> usize {
+        self.map.height()
+    }
+
     /// Starts the game.
     ///
     /// Must be called once before updating the game state.

@@ -133,6 +133,20 @@ class Game:
         seed: int,
         replay_filename: Optional[str],
     ) -> None: ...
+    def width(self) -> int:
+        """Returns the width of the map.
+
+        :return: The width of the map.
+        :rtype: int
+        """
+
+    def height(self) -> int:
+        """Returns the height of the map.
+
+        :return: The height of the map.
+        :rtype: int
+        """
+
     def start(self) -> GameState:
         """Starts the game.
 
