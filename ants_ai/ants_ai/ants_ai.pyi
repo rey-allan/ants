@@ -147,6 +147,13 @@ class Game:
         :rtype: int
         """
 
+    def players(self) -> int:
+        """Returns the number of players in the game.
+
+        :return: The number of players in the game.
+        :rtype: int
+        """
+
     def start(self) -> GameState:
         """Starts the game.
 

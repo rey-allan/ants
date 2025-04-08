@@ -59,43 +59,65 @@ class AntsEnv(gym.Env):
             replay_filename,
         )
 
-        # The observation space is a 2D grid representing a partially observable map.
-        # The first channel represents the visibility "mask", i.e. `1` means that the entity is visible and `0` means that it is not.
-        # The remaining channels represent the entities in the game, as follows:
-        # 1: Live colony (i.e. ants of the player)
-        # 2: Dead colony (i.e. ants of the player)
-        # 3: Enemy colonies (i.e. ants of the enemies)
-        # 4: Dead enemy colonies (i.e. ants of the enemies)
-        # 5: Food
-        # 6: Hills (i.e. the hills of the player)
-        # 7: Razed hills (i.e. the hills of the player)
-        # 8: Enemy hills (i.e. the hills of the enemies)
-        # 9: Razed enemy hills (i.e. the hills of the enemies)
-        # 10: Water
-        # The observation is channel-first.
         self.channels = 11
-        self.observation_space = gym.spaces.Box(
-            low=0,
-            high=1,
-            shape=(self.channels, self.game.width(), self.game.height()),
-            dtype=int,
+        self.observation_space = gym.spaces.Dict(
+            {
+                # The observation space is a 2D grid representing a partially observable map.
+                # The first channel represents the visibility "mask", i.e. `1` means that the entity is visible and `0` means that it is not.
+                # The remaining channels represent the entities in the game, as follows:
+                # 1: Live colony (i.e. ants of the player)
+                # 2: Dead colony (i.e. ants of the player)
+                # 3: Enemy colonies (i.e. ants of the enemies)
+                # 4: Dead enemy colonies (i.e. ants of the enemies)
+                # 5: Food
+                # 6: Hills (i.e. the hills of the player)
+                # 7: Razed hills (i.e. the hills of the player)
+                # 8: Enemy hills (i.e. the hills of the enemies)
+                # 9: Razed enemy hills (i.e. the hills of the enemies)
+                # 10: Water
+                # The observation is channel-first.
+                "map": gym.spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=(self.channels, self.game.width(), self.game.height()),
+                    dtype=int,
+                ),
+                # This extra space is used to represent the ants of the player.
+                # It's an array where each element is a binary value indicating whether the ant is alive or not.
+                "ants": gym.spaces.MultiBinary(MAX_ANTS),
+            },
+            seed=seed,
         )
         # The action space is a list of actions for each ant.
         # The possible actions are: N, E, S, W, Stay
-        self.action_space = gym.spaces.MultiDiscrete([5] * MAX_ANTS)
+        self.action_space = gym.spaces.MultiDiscrete([5] * MAX_ANTS, seed=seed)
 
-    def reset(self, seed=None, options=None) -> Tuple[np.ndarray, dict[str, Any]]:
+        # Tracks the index in the action space of each ant
+        self._ant_id_to_index = {}
+        # Tracks the next index available to use for the next ant per player
+        self._next_index_per_player = {
+            player: 0 for player in range(self.game.players())
+        }
+
+    def reset(self, seed=None, options=None) -> Tuple[dict[str, Any], dict[str, Any]]:
         """Resets the environment.
 
         :return: The initial observation and info.
 
-                 - The observation is a 2D grid representing a partially observable map.
+                 - The observation is a 2D grid representing a partially observable map and the vector of ants.
                  - The info is a dictionary with the keys `turn`, `scores` and `done_reason`.
-        :rtype: Tuple[np.ndarray, dict[str, Any]]
+        :rtype: Tuple[dict[str, Any], dict[str, Any]]
         """
         super().reset(seed=seed, options=options)
 
+        self._ant_id_to_index = {}
+        self._next_index_per_player = {
+            player: 0 for player in range(self.game.players())
+        }
+
         game_state = self.game.start()
+        self._update_mapping(game_state)
+
         return self._get_obs(game_state), self._get_info(game_state)
 
     # TODO: Update method to adhere to the gym API
@@ -133,12 +155,13 @@ class AntsEnv(gym.Env):
         """
         self.game.draw()
 
-    def _get_obs(self, game_state: GameState) -> np.ndarray:
+    def _get_obs(self, game_state: GameState) -> dict[str, Any]:
         # The agent is always player 0
         ants = game_state.ants[0]
-        obs = np.zeros(
+        minimap = np.zeros(
             (self.channels, self.game.width(), self.game.height()), dtype=int
         )
+        ants_mask = np.zeros(MAX_ANTS, dtype=int)
 
         # 0: Visibility mask
         # 1: Live colony (i.e. ants of the player)
@@ -152,27 +175,35 @@ class AntsEnv(gym.Env):
         # 9: Razed enemy hills (i.e. the hills of the enemies)
         # 10: Water
         for ant in ants:
-            # Add the ant itself
-            obs[0, ant.col, ant.row] = 1
-            obs[1, ant.col, ant.row] = 1
+            # Add the ant to the mask
+            index = self._ant_id_to_index[ant.id]
+            ants_mask[index] = 1
 
+            # Add the ant to the minimap
+            minimap[0, ant.col, ant.row] = 1
+            minimap[1, ant.col, ant.row] = 1
+
+            # Add the field of vision of the ant to the minimap
             for entity in ant.field_of_vision:
-                obs[0, entity.col, entity.row] = 1
+                minimap[0, entity.col, entity.row] = 1
 
                 if entity.name == "Ant":
                     colony = 1 if entity.player == ant.player else 3
                     alive = 1 - int(entity.alive)
-                    obs[colony + alive, entity.col, entity.row] = 1
+                    minimap[colony + alive, entity.col, entity.row] = 1
                 elif entity.name == "Food":
-                    obs[5, entity.col, entity.row] = 1
+                    minimap[5, entity.col, entity.row] = 1
                 elif entity.name == "Hill":
                     colony = 6 if entity.player == ant.player else 8
                     alive = 1 - int(entity.alive)
-                    obs[colony + alive, entity.col, entity.row] = 1
+                    minimap[colony + alive, entity.col, entity.row] = 1
                 elif entity.name == "Water":
-                    obs[10, entity.col, entity.row] = 1
+                    minimap[10, entity.col, entity.row] = 1
 
-        return obs
+        return {
+            "map": minimap,
+            "ants": ants_mask,
+        }
 
     def _get_info(self, game_state: GameState) -> dict[str, Any]:
         return {
@@ -180,3 +211,19 @@ class AntsEnv(gym.Env):
             "scores": game_state.scores,
             "done_reason": game_state.finished_reason,
         }
+
+    def _update_mapping(self, game_state: GameState):
+        for player, ants in enumerate(game_state.ants) in range(self.game.players()):
+            for ant in ants:
+                index = self._next_index_per_player[player]
+
+                if ant.id in self._ant_id_to_index:
+                    continue
+
+                if index >= MAX_ANTS:
+                    raise ValueError(
+                        f"Too many ants for player {player} ({index}/{MAX_ANTS}!"
+                    )
+
+                self._ant_id_to_index[ant.id] = index
+                self._next_index_per_player[player] += 1

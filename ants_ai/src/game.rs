@@ -218,6 +218,11 @@ impl Game {
         self.map.height()
     }
 
+    /// Returns the number of players in the game.
+    pub fn players(&self) -> usize {
+        self.map.players()
+    }
+
     /// Starts the game.
     ///
     /// Must be called once before updating the game state.
