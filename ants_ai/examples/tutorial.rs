@@ -30,7 +30,17 @@ fn main() {
 
     let replay_filename = "/tmp/tutorial_replay.json".to_string();
 
-    let mut game = Game::new(&map_contents, 4, 5, 1, 5, 1500, 0, Some(replay_filename));
+    let mut game = Game::new(
+        &map_contents,
+        4,
+        5,
+        1,
+        5,
+        1500,
+        500,
+        0,
+        Some(replay_filename),
+    );
     let mut player1 = RandomAgent::new(0);
     let mut player2 = RandomAgent::new(1);
 

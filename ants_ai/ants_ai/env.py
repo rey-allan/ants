@@ -5,9 +5,6 @@ import numpy as np
 
 from .ants_ai import Action, Ant, Game, GameState
 
-# TODO: Is this a sensible amount?
-MAX_ANTS = 500
-
 
 class AntsEnv(gym.Env):
     """The Ants environment.
@@ -24,6 +21,8 @@ class AntsEnv(gym.Env):
     :type food_rate: int, optional
     :param max_turns: The maximum number of turns for the Ants game, defaults to 1500.
     :type max_turns: int, optional
+    :param max_colony_size: The maximum number of live ants a player can have at any time, defaults to 500.
+    :type max_colony_size: int, optional
     :param seed: The seed for the random number generator, defaults to 0.
     :type seed: int, optional
     :param replay_filename: The filename to save the replay of the game to. If `None`, no replay will be saved, defaults to `None`.
@@ -40,6 +39,7 @@ class AntsEnv(gym.Env):
         food_radius2: int = 1,
         food_rate: int = 5,
         max_turns: int = 1500,
+        max_colony_size: int = 500,
         seed: int = 0,
         replay_filename=None,
     ):
@@ -55,6 +55,7 @@ class AntsEnv(gym.Env):
             food_radius2,
             food_rate,
             max_turns,
+            max_colony_size,
             seed,
             replay_filename,
         )
@@ -84,14 +85,15 @@ class AntsEnv(gym.Env):
                 ),
                 # This extra space is used to represent the ants of the player.
                 # It's an array where each element is a binary value indicating whether the ant is alive or not.
-                "ants": gym.spaces.MultiBinary(MAX_ANTS),
+                "ants": gym.spaces.MultiBinary(max_colony_size),
             },
             seed=seed,
         )
         # The action space is a list of actions for each ant.
         # The possible actions are: N, E, S, W, Stay
-        self.action_space = gym.spaces.MultiDiscrete([5] * MAX_ANTS, seed=seed)
+        self.action_space = gym.spaces.MultiDiscrete([5] * max_colony_size, seed=seed)
 
+        self._max_colony_size = max_colony_size
         # Tracks the index in the action space of each ant
         self._ant_id_to_index = {}
         # Tracks the next index available to use for the next ant per player
@@ -161,7 +163,7 @@ class AntsEnv(gym.Env):
         minimap = np.zeros(
             (self.channels, self.game.width(), self.game.height()), dtype=int
         )
-        ants_mask = np.zeros(MAX_ANTS, dtype=int)
+        ants_mask = np.zeros(self._max_colony_size, dtype=int)
 
         # 0: Visibility mask
         # 1: Live colony (i.e. ants of the player)
@@ -220,9 +222,9 @@ class AntsEnv(gym.Env):
                 if ant.id in self._ant_id_to_index:
                     continue
 
-                if index >= MAX_ANTS:
+                if index >= self._max_colony_size:
                     raise ValueError(
-                        f"Too many ants for player {player} ({index}/{MAX_ANTS}!"
+                        f"Too many ants for player {player} ({index}/{self._max_colony_size}. This should not happen, and this is a bug."
                     )
 
                 self._ant_id_to_index[ant.id] = index

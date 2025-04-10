@@ -116,6 +116,8 @@ class Game:
     :type food_rate: int
     :param max_turns: The maximum number of turns for the Ants game.
     :type max_turns: int
+    :param max_colony_size: The maximum number of live ants a player can have at any time.
+    :type max_colony_size: int
     :param seed: The seed for the random number generator.
     :type seed: int
     :param replay_filename: The filename to save the replay of the game to. If `None`, no replay will be saved.
@@ -130,6 +132,7 @@ class Game:
         food_radius2: int,
         food_rate: int,
         max_turns: int,
+        max_colony_size: int,
         seed: int,
         replay_filename: Optional[str],
     ) -> None: ...
