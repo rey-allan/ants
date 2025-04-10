@@ -11,8 +11,8 @@ class RandomAgent(Agent):
 
     :param name: The name of the agent.
     :type name: str
-    :param env: The environment to use.
-    :type env: gym.Env
+    :param action_space: The action space of the environment.
+    :type action_space: gym.Space
     :param num_actions: The number of actions the agent can take.
     :type num_actions: int
     :param seed: The seed for the random number generator.
@@ -20,10 +20,11 @@ class RandomAgent(Agent):
     """
 
     def __init__(
-        self, name: str, env: gym.Env, num_actions: int, seed: int = None
+        self, name: str, action_space: gym.Space, num_actions: int, seed: int = None
     ) -> None:
-        super().__init__(name, env, seed)
+        super().__init__(name, seed)
 
+        self._action_space = action_space
         self._num_actions = num_actions
 
     def learn(self, **kwargs: dict[str, Any]) -> None:
@@ -33,7 +34,7 @@ class RandomAgent(Agent):
         self, observation: dict[str, Any], **kwargs: dict[str, Any]
     ) -> Tuple[np.ndarray, Any]:
         ants = observation["ants"]
-        max_ants = self._env.action_space.shape[0]
+        max_ants = self._action_space.shape[0]
 
         # Build a full max of shape (max_ants, num_actions)
         mask = np.zeros((max_ants, self._num_actions), dtype=np.int8)
@@ -46,7 +47,7 @@ class RandomAgent(Agent):
                 mask[i, -1] = 1
 
         # Sample a random action for each ant using the mask
-        actions = self._env.action_space.sample(mask)
+        actions = self._action_space.sample(mask)
 
         return actions, None
 

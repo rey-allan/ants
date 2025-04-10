@@ -1,12 +1,12 @@
 from typing import List, Optional
 
 class Action:
-    """A class representing an action that an ant can tak.
+    """A class representing an action that an ant can take.
 
     Attributes:
         row (int): The row of the location of the ant.
         col (int): The column of the location of the ant.
-        direction (Direction): The direction of the action.
+        direction (Direction): The direction of the movement.
     """
 
     row: int
@@ -14,7 +14,7 @@ class Action:
     col: int
     """The column of the location of the ant."""
     direction: Direction
-    """The direction of the action."""
+    """The direction of the movement."""
 
 class Ant:
     """A class representing an ant.

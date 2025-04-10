@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Tuple
 
-import gymnasium as gym
 import numpy as np
 
 
@@ -10,17 +9,14 @@ class Agent(ABC):
 
     :param name: The name of the agent
     :type name: str
-    :param env: The environment to use
-    :type env: gym.Env
     :param seed: The seed for the random number generator, defaults to None
     :type seed: int, optional
     """
 
-    def __init__(self, name: str, env: gym.Env, seed: int = None) -> None:
+    def __init__(self, name: str, seed: int = None) -> None:
         super().__init__()
 
         self._name = name
-        self._env = env
         self._seed = seed
 
     @abstractmethod

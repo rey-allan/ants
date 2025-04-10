@@ -3,7 +3,12 @@ from typing import Any, List, Tuple
 import gymnasium as gym
 import numpy as np
 
-from .ants_ai import Action, Ant, Game, GameState
+from .agents import Agent, RandomAgent
+from .ants_ai import Action, Direction, Game
+
+type ActType = np.ndarray
+type InfoType = dict[str, Any]
+type ObsType = dict[str, Any]
 
 
 class AntsEnv(gym.Env):
@@ -23,6 +28,8 @@ class AntsEnv(gym.Env):
     :type max_turns: int, optional
     :param max_colony_size: The maximum number of live ants a player can have at any time, defaults to 500.
     :type max_colony_size: int, optional
+    :param other_agents: The other agents to use in the game. If `None`, agents that act randomly will be created for each other player.
+    :type other_agents: List[Agent], optional
     :param seed: The seed for the random number generator, defaults to 0.
     :type seed: int, optional
     :param replay_filename: The filename to save the replay of the game to. If `None`, no replay will be saved, defaults to `None`.
@@ -40,6 +47,7 @@ class AntsEnv(gym.Env):
         food_rate: int = 5,
         max_turns: int = 1500,
         max_colony_size: int = 500,
+        other_agents: List[Agent] = None,
         seed: int = 0,
         replay_filename=None,
     ):
@@ -89,65 +97,116 @@ class AntsEnv(gym.Env):
             },
             seed=seed,
         )
+        self.num_actions = 5
         # The action space is a list of actions for each ant.
         # The possible actions are: N, E, S, W, Stay
-        self.action_space = gym.spaces.MultiDiscrete([5] * max_colony_size, seed=seed)
+        self.action_space = gym.spaces.MultiDiscrete(
+            [self.num_actions] * max_colony_size, seed=seed
+        )
 
         self._max_colony_size = max_colony_size
-        # Tracks the index in the action space of each ant
-        self._ant_id_to_index = {}
+        # Tracks the latest game state
+        self._game_state = None
+        # Tracks the index in the action space of each ant per player
+        self._ant_id_to_index = {player: {} for player in range(self.game.players())}
         # Tracks the next index available to use for the next ant per player
         self._next_index_per_player = {
             player: 0 for player in range(self.game.players())
         }
+        # Track reusable indices from dead ants per player
+        self._free_indices_per_player = {
+            player: [] for player in range(self.game.players())
+        }
+        self._action_to_direction = {
+            0: Direction.North,
+            1: Direction.East,
+            2: Direction.South,
+            3: Direction.West,
+            4: "Stay",
+        }
 
-    def reset(self, seed=None, options=None) -> Tuple[dict[str, Any], dict[str, Any]]:
+        self._validate_other_agents()
+        self._other_agents = (
+            other_agents
+            if isinstance(other_agents, list)
+            else [
+                RandomAgent(
+                    name=f"Player {i + 1}",
+                    action_space=self.action_space,
+                    num_actions=self.num_actions,
+                    seed=seed + i,
+                )
+                for i in range(self.game.players() - 1)
+            ]
+        )
+
+    def reset(self, seed=None, options=None) -> Tuple[ObsType, InfoType]:
         """Resets the environment.
 
         :return: The initial observation and info.
 
                  - The observation is a 2D grid representing a partially observable map and the vector of ants.
                  - The info is a dictionary with the keys `turn`, `scores` and `done_reason`.
-        :rtype: Tuple[dict[str, Any], dict[str, Any]]
+        :rtype: Tuple[ObsType, InfoType]
         """
         super().reset(seed=seed, options=options)
 
-        self._ant_id_to_index = {}
+        self._ant_id_to_index = {player: {} for player in range(self.game.players())}
         self._next_index_per_player = {
             player: 0 for player in range(self.game.players())
         }
+        self._free_indices_per_player = {
+            player: [] for player in range(self.game.players())
+        }
 
         game_state = self.game.start()
-        self._update_mapping(game_state)
 
-        return self._get_obs(game_state), self._get_info(game_state)
+        self._game_state = game_state
+        self._update_index_mapping()
 
-    # TODO: Update method to adhere to the gym API
-    # TODO: Figure out how to handle all the other players
-    def step(
-        self, actions: List[Action]
-    ) -> Tuple[List[List[Ant]], List[int], bool, dict[str, Any]]:
+        return self._get_obs(player=0), self._get_info()
+
+    def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, InfoType]:
         """Takes a step in the environment.
 
-        :param actions: The actions to take for each ant.
-        :type actions: List[Action]
-        :return: The observation, rewards, whether the game is done and the info.
-
-                 - The observation is a list of lists of `Ant` objects, one list of ants per player.
-                 - The rewards is a list of rewards for each player. The rewards are the scores of the players. **Important:** Users are responsible for defining better rewards using other information.
-                 - The done is a boolean indicating whether the game is done.
-                 - The info is a dictionary with the keys `turn`, `scores` and `done_reason`.
-        :rtype: Tuple[List[List[Ant]], List[int], bool, dict[str, Any]]
+        :param action: The action to take. The action is an array of actions for each ant.
+        :type actions: ActType
+        :return: The observation, reward, whether the game is done, whether the game was truncated and extra info.
+        :rtype: Tuple[ObsType, float, bool, bool, InfoType]
         """
-        game_state = self.game.update(actions)
-        # Rewards are the scores of the players
+        # Map the RL agent's action to the game actions
+        game_actions: List[Action] = []
+        for player in range(self.game.players()):
+            # Player 0 is the main RL agent
+            if player == 0:
+                raw_action = action
+            else:
+                # Get the action from the other agents
+                raw_action = self._other_agents[player].predict(
+                    self._get_obs(player=player)
+                )
+
+            for ant in self._game_state.ants[player]:
+                index = self._ant_id_to_index[player][ant.id]
+                _action = raw_action[index]
+
+                if _action == "Stay":
+                    # `Stay` means the ant does not move (i.e. doesn't take any action)
+                    continue
+
+                direction = self._action_to_direction[_action]
+                game_actions.append(Action(ant.row, ant.col, direction))
+
+        game_state = self.game.update(game_actions)
 
         return (
-            game_state.ants,
-            # The scores are the rewards
+            self._get_obs(player=0),
+            # TODO: Define a proper reward function. The scores are the rewards for now.
             game_state.scores,
             game_state.finished,
-            self._get_info(game_state),
+            # Truncated is always False, since the game is not truncated
+            False,
+            self._get_info(),
         )
 
     def render(self):
@@ -157,9 +216,9 @@ class AntsEnv(gym.Env):
         """
         self.game.draw()
 
-    def _get_obs(self, game_state: GameState) -> dict[str, Any]:
-        # The agent is always player 0
-        ants = game_state.ants[0]
+    def _get_obs(self, player: int) -> ObsType:
+        ants = self._game_state.ants[player]
+        indices = self._ant_id_to_index[player]
         minimap = np.zeros(
             (self.channels, self.game.width(), self.game.height()), dtype=int
         )
@@ -178,7 +237,7 @@ class AntsEnv(gym.Env):
         # 10: Water
         for ant in ants:
             # Add the ant to the mask
-            index = self._ant_id_to_index[ant.id]
+            index = indices[ant.id]
             ants_mask[index] = 1
 
             # Add the ant to the minimap
@@ -207,25 +266,50 @@ class AntsEnv(gym.Env):
             "ants": ants_mask,
         }
 
-    def _get_info(self, game_state: GameState) -> dict[str, Any]:
+    def _get_info(self) -> InfoType:
         return {
-            "turn": game_state.turn,
-            "scores": game_state.scores,
-            "done_reason": game_state.finished_reason,
+            "turn": self._game_state.turn,
+            "scores": self._game_state.scores,
+            "done_reason": self._game_state.finished_reason,
         }
 
-    def _update_mapping(self, game_state: GameState):
-        for player, ants in enumerate(game_state.ants) in range(self.game.players()):
-            for ant in ants:
-                index = self._next_index_per_player[player]
+    def _update_index_mapping(self) -> None:
+        for player, ants in enumerate(self._game_state.ants) in range(
+            self.game.players()
+        ):
+            self._free_dead_ants_indices(player)
 
-                if ant.id in self._ant_id_to_index:
+            for ant in ants:
+                if ant.id in self._ant_id_to_index[player]:
                     continue
 
-                if index >= self._max_colony_size:
-                    raise ValueError(
-                        f"Too many ants for player {player} ({index}/{self._max_colony_size}. This should not happen, and this is a bug."
-                    )
+                if self._free_indices_per_player[player]:
+                    index = self._free_indices_per_player[player].pop()
+                else:
+                    index = self._next_index_per_player[player]
 
-                self._ant_id_to_index[ant.id] = index
-                self._next_index_per_player[player] += 1
+                    if index >= self._max_colony_size:
+                        raise ValueError(
+                            f"Player {player} has too many ants ({index}/{self._max_colony_size}). This is a bug!"
+                        )
+                    self._next_index_per_player[player] += 1
+
+                self._ant_id_to_index[player][ant.id] = index
+
+    def _free_dead_ants_indices(self, player: int) -> None:
+        dead_ant_ids = set(self._ant_id_to_index[player]) - set(
+            [ant.id for ant in self._game_state.ants[player]]
+        )
+        for dead_ant_id in dead_ant_ids:
+            index = self._ant_id_to_index[player][dead_ant_id]
+            self._free_indices_per_player[player].append(index)
+            del self._ant_id_to_index[player][dead_ant_id]
+
+    def _validate_other_agents(self) -> None:
+        if self._other_agents is None or self._other_agents == "random":
+            return
+
+        if len(self._other_agents) != self.game.players() - 1:
+            raise ValueError(
+                f"Number of agents ({len(self._other_agents)}) doesn't match number of other players ({self.game.players() - 1})."
+            )
