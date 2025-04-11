@@ -36,9 +36,11 @@ class AntsEnv(gym.Env):
     :type seed: int, optional
     :param replay_filename: The filename to save the replay of the game to. If `None`, no replay will be saved, defaults to `None`.
     :type replay_filename: _type_, optional
+    :param render_mode: The render mode to use. If `None`, no render is computed. Defaults to `None`.
+    :type render_mode: str, optional
     """
 
-    metadata = {"render_modes": ["ansi", "human"]}
+    metadata = {"render_modes": ["human"]}
 
     def __init__(
         self,
@@ -51,7 +53,8 @@ class AntsEnv(gym.Env):
         max_colony_size: int = 500,
         other_agents: List[Agent] = None,
         seed: int = 0,
-        replay_filename=None,
+        replay_filename: str = None,
+        render_mode: str = None,
     ):
         super().__init__()
 
@@ -142,6 +145,8 @@ class AntsEnv(gym.Env):
             ]
         )
 
+        self._render_mode = render_mode
+
     def reset(self, seed=None, options=None) -> Tuple[ObsType, InfoType]:
         """Resets the environment.
 
@@ -212,11 +217,14 @@ class AntsEnv(gym.Env):
             self._get_info(),
         )
 
-    def render(self):
+    def render(self) -> None:
         """Renders the current state of the environment to the console.
 
         It is recommended to use `replay_filename` in the constructor to save the replay to a file, and use the visualizer to view the replay instead of using this method.
         """
+        if self._render_mode is None or self._render_mode != "human":
+            return
+
         self.game.draw()
 
     def _get_obs(self, player: int) -> ObsType:
