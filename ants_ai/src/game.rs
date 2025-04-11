@@ -45,6 +45,8 @@ pub struct GameState {
     pub scores: Vec<usize>,
     /// The ants for each player where the index is the player number.
     pub ants: Vec<Vec<PlayerAnt>>,
+    /// The number of ants in the hive for each player where the index is the player number.
+    pub hive: Vec<usize>,
     /// Whether the game has finished.
     pub finished: bool,
     /// The reason the game finished. `None` if the game has not finished.
@@ -692,6 +694,7 @@ impl Game {
             turn: self.turn,
             scores: self.scores.clone(),
             ants,
+            hive: self.hive.clone(),
             finished: self.finished,
             finished_reason: self.finished_reason.clone(),
             winner: self.winner,
