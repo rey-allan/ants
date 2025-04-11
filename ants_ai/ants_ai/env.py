@@ -130,7 +130,7 @@ class AntsEnv(gym.Env):
             4: "Stay",
         }
 
-        self._validate_other_agents()
+        self._validate_other_agents(other_agents)
         self._other_agents = (
             other_agents
             if isinstance(other_agents, list)
@@ -321,9 +321,7 @@ class AntsEnv(gym.Env):
         return scores + ants + hive
 
     def _update_index_mapping(self) -> None:
-        for player, ants in enumerate(self._game_state.ants) in range(
-            self.game.players()
-        ):
+        for player, ants in enumerate(self._game_state.ants):
             self._free_dead_ants_indices(player)
 
             for ant in ants:
@@ -352,11 +350,11 @@ class AntsEnv(gym.Env):
             self._free_indices_per_player[player].append(index)
             del self._ant_id_to_index[player][dead_ant_id]
 
-    def _validate_other_agents(self) -> None:
-        if self._other_agents is None or self._other_agents == "random":
+    def _validate_other_agents(self, other_agents: List[Agent]) -> None:
+        if other_agents is None:
             return
 
-        if len(self._other_agents) != self.game.players() - 1:
+        if len(other_agents) != self.game.players() - 1:
             raise ValueError(
-                f"Number of agents ({len(self._other_agents)}) doesn't match number of other players ({self.game.players() - 1})."
+                f"Number of agents ({len(other_agents)}) doesn't match number of other players ({self.game.players() - 1})."
             )
