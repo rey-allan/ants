@@ -1,45 +1,30 @@
-import random
 import time
 from pathlib import Path
 
-from ants_ai import Action, AntsEnv, Direction, Visualizer
+import numpy as np
 
-
-class RandomAgent:
-    def __init__(self, seed: int) -> None:
-        random.seed(seed)
-
-    def act(self, row: int, col: int) -> Action:
-        direction = random.choice(
-            [Direction.North, Direction.East, Direction.West, Direction.South]
-        )
-        return Action(row, col, direction)
+from ants_ai import AntsEnv, RandomAgent, Visualizer
 
 
 def main() -> None:
     map_file = Path(__file__).parent / "maps" / "tutorial.map"
 
     env = AntsEnv(map_file, replay_filename="/tmp/tutorial_replay.json")
-    p1 = RandomAgent(24)
-    p2 = RandomAgent(42)
+    p1 = RandomAgent("RL Agent", env.action_space, env.num_actions, seed=42)
 
     start = time.time()
     done = False
-    obs, _ = env.reset()
+    obs, _ = env.reset(seed=42)
+    rewards = []
     while not done:
-        actions = []
-        for player, ants in enumerate(obs):
-            for ant in ants:
-                action = (
-                    p1.act(ant.row, ant.col)
-                    if player == 0
-                    else p2.act(ant.row, ant.col)
-                )
-                actions.append(action)
+        action, _ = p1.predict(obs)
+        obs, reward, done, _, info = env.step(action)
+        rewards.append(reward)
 
-        obs, rewards, done, info = env.step(actions)
-
-    print(f"Game finished. Scores: {rewards}. Reason: {info['done_reason']}")
+    print("Game finished")
+    print(f"Avg. Reward: {np.average(rewards)}")
+    print(f"Reason: {info['done_reason']}")
+    print(f"Winner: {info['winner']}")
     print(f"Game took {time.time() - start} seconds")
 
     Visualizer("/tmp/tutorial_replay.json", scale=20, show_grid=True).run()
