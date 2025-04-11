@@ -319,7 +319,7 @@ class AntsEnv(gym.Env):
         # - The ants in the hive (a proxy for food harvested successfully)
         scores = self._game_state.scores[player]
         ants = len(self._game_state.ants[player])
-        hive = len(self._game_state.hive[player])
+        hive = self._game_state.hive[player]
 
         return scores + ants + hive
 
