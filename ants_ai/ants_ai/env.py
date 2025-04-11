@@ -188,19 +188,21 @@ class AntsEnv(gym.Env):
                 raw_action = action
             else:
                 # Get the action from the other agents
-                raw_action = self._other_agents[player].predict(
+                # We subtract 1 because `other_agents` is a 0-indexed list of the _other_ players
+                # and the first other player is player 1 (i.e. index 0).
+                raw_action, _ = self._other_agents[player - 1].predict(
                     self._get_obs(player=player)
                 )
 
             for ant in self._game_state.ants[player]:
                 index = self._ant_id_to_index[player][ant.id]
                 _action = raw_action[index]
+                direction = self._action_to_direction[_action]
 
-                if _action == "Stay":
+                if direction == "Stay":
                     # `Stay` means the ant does not move (i.e. doesn't take any action)
                     continue
 
-                direction = self._action_to_direction[_action]
                 game_actions.append(Action(ant.row, ant.col, direction))
 
         game_state = self.game.update(game_actions)
