@@ -36,18 +36,23 @@ class RandomAgent(Agent):
         ants = observation["ants"]
         max_ants = self._action_space.shape[0]
 
-        # Build a full max of shape (max_ants, num_actions)
-        mask = np.zeros((max_ants, self._num_actions), dtype=np.int8)
+        # Create a mask for each ant
+        # Each mask is a binary array of shape (num_actions,)
+        # where 1 indicates that the action is valid for the ant
+        masks = []
         for i in range(max_ants):
             # If the ant is alive, then it can take any action
             if ants[i]:
-                mask[i] = [1] * self._num_actions
+                masks.append(np.ones(self._num_actions, dtype=np.int8))
             # If no ant is present (or dead), then it can only take the no-op action
             else:
-                mask[i, -1] = 1
+                mask = np.zeros(self._num_actions, dtype=np.int8)
+                mask[-1] = 1
+                masks.append(mask)
 
         # Sample a random action for each ant using the mask
-        actions = self._action_space.sample(mask)
+        # `sample()` expects a tuple
+        actions = self._action_space.sample(mask=tuple(masks))
 
         return actions, None
 
