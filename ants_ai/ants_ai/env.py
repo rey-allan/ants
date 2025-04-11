@@ -153,7 +153,7 @@ class AntsEnv(gym.Env):
         :return: The initial observation and info.
 
                  - The observation is a 2D grid representing a partially observable map and the vector of ants.
-                 - The info is a dictionary with the keys `turn`, `scores` and `done_reason`.
+                 - The info is a dictionary with the keys `turn`, `scores`, `done_reason`, `winner`.
         :rtype: Tuple[ObsType, InfoType]
         """
         super().reset(seed=seed, options=options)
@@ -282,6 +282,7 @@ class AntsEnv(gym.Env):
             "turn": self._game_state.turn,
             "scores": self._game_state.scores,
             "done_reason": self._game_state.finished_reason,
+            "winner": self._game_state.winner,
         }
 
     def _get_reward(self) -> float:
