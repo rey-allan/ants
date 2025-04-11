@@ -187,6 +187,7 @@ class GameState:
         ants (List[List[Ant]]): The list of ants for each player.
         finished (bool): Whether the game has finished.
         finished_reason (Optional[FinishedReason]): The reason the game finished. Only present if the game has finished.
+        winner (Optional[int]): The player that won the game. Only present if the game has finished and there is a winner.
     """
 
     turn: int
@@ -199,3 +200,5 @@ class GameState:
     """Whether the game has finished."""
     finished_reason: Optional[FinishedReason]
     """The reason the game finished. Only present if the game has finished."""
+    winner: Optional[int]
+    """The player that won the game. Only present if the game has finished and there is a winner."""

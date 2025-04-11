@@ -25,6 +25,7 @@ pub struct Game {
     started: bool,
     finished: bool,
     finished_reason: Option<FinishedReason>,
+    winner: Option<usize>,
     cutoff_threshold: usize,
     turns_with_too_much_food: usize,
     points_for_razing_hill: usize,
@@ -48,6 +49,8 @@ pub struct GameState {
     pub finished: bool,
     /// The reason the game finished. `None` if the game has not finished.
     pub finished_reason: Option<FinishedReason>,
+    /// The player that won the game. `None` if the game has not finished or if the game finished without a winner.
+    pub winner: Option<usize>,
 }
 
 /// Represents the direction an ant can move.
@@ -195,6 +198,7 @@ impl Game {
             started: false,
             finished: false,
             finished_reason: None,
+            winner: None,
             cutoff_threshold: 150,
             turns_with_too_much_food: 0,
             points_for_razing_hill: 2,
@@ -235,6 +239,7 @@ impl Game {
         self.started = true;
         self.finished = false;
         self.finished_reason = None;
+        self.winner = None;
         self.turns_with_too_much_food = 0;
         self.hive = vec![0; self.map.players()];
         self.map = Map::parse(&self.map_contents);
@@ -689,6 +694,7 @@ impl Game {
             ants,
             finished: self.finished,
             finished_reason: self.finished_reason.clone(),
+            winner: self.winner,
         }
     }
 
@@ -708,20 +714,25 @@ impl Game {
         if self.turns_with_too_much_food >= self.cutoff_threshold {
             self.finished = true;
             self.finished_reason = Some(FinishedReason::TooMuchFood);
+            self.winner = None;
 
             return;
         }
 
-        if self.remaining_players() == 1 {
+        let remaining_players = self.remaining_players();
+        if remaining_players.len() == 1 {
             self.finished = true;
             self.finished_reason = Some(FinishedReason::LoneSurvivor);
+            self.winner = Some(*remaining_players.iter().next().unwrap());
 
             return;
         }
 
-        if self.rank_stabilized() {
+        let (rank_stabilized, leader) = self.rank_stabilized();
+        if rank_stabilized {
             self.finished = true;
             self.finished_reason = Some(FinishedReason::RankStabilized);
+            self.winner = leader;
 
             return;
         }
@@ -729,6 +740,7 @@ impl Game {
         if self.turn >= self.max_turns {
             self.finished = true;
             self.finished_reason = Some(FinishedReason::TurnLimitReached);
+            self.winner = None;
         }
     }
 
@@ -746,15 +758,14 @@ impl Game {
         }
     }
 
-    fn remaining_players(&self) -> usize {
+    fn remaining_players(&self) -> HashSet<usize> {
         self.live_ants()
             .into_iter()
             .map(|(ant, _, _)| ant.player().unwrap())
             .collect::<HashSet<usize>>()
-            .len()
     }
 
-    fn rank_stabilized(&self) -> bool {
+    fn rank_stabilized(&self) -> (bool, Option<usize>) {
         let live_ant_hills_per_player = self.live_ant_hills_per_player();
         let current_scores = &self.scores;
 
@@ -763,7 +774,7 @@ impl Game {
             .iter()
             .all(|score| *score == current_scores[0])
         {
-            return false;
+            return (false, None);
         }
 
         // Get the player that is in the lead
@@ -793,12 +804,12 @@ impl Game {
 
             // If this player can surpass the leader, the rank isn't stabilized yet
             if scores[player] > *leader_score {
-                return false;
+                return (false, None);
             }
         }
 
         // If no player can surpass the leader, the rank is stabilized
-        true
+        (true, Some(leader))
     }
 }
 
@@ -1738,6 +1749,7 @@ mod tests {
 
         assert!(game.finished);
         assert_eq!(game.finished_reason, Some(FinishedReason::LoneSurvivor));
+        assert_eq!(game.winner, Some(0));
     }
 
     #[test]
@@ -1757,6 +1769,7 @@ mod tests {
 
         assert!(!game.finished);
         assert!(game.finished_reason.is_none());
+        assert!(game.winner.is_none());
         // Sanity check to make sure the original scores are not changed
         assert_eq!(game.scores, vec![1, 1]);
     }
@@ -1781,6 +1794,7 @@ mod tests {
 
         assert!(game.finished);
         assert_eq!(game.finished_reason, Some(FinishedReason::RankStabilized));
+        assert_eq!(game.winner, Some(0));
         // Sanity check to make sure the original scores are not changed
         assert_eq!(game.scores, vec![5, 0, 0, 1]);
     }
@@ -1806,6 +1820,7 @@ mod tests {
 
         assert!(!game.finished);
         assert!(game.finished_reason.is_none());
+        assert!(game.winner.is_none());
         // Sanity check to make sure the original scores are not changed
         assert_eq!(game.scores, vec![3, 0, 1, 1]);
     }
@@ -1826,5 +1841,6 @@ mod tests {
 
         assert!(game.finished);
         assert_eq!(game.finished_reason, Some(FinishedReason::TurnLimitReached));
+        assert!(game.winner.is_none());
     }
 }

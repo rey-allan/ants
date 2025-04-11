@@ -64,7 +64,8 @@ fn main() {
     }
 
     println!(
-        "\nGame finished due to: {:?}",
-        state.finished_reason.unwrap()
+        "\nGame finished due to: {:?} with winner: {:?}",
+        state.finished_reason.unwrap(),
+        state.winner.unwrap_or(999)
     );
 }
