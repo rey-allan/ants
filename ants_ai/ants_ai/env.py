@@ -4,11 +4,13 @@ import gymnasium as gym
 import numpy as np
 
 from .agents import Agent, RandomAgent
-from .ants_ai import Action, Direction, Game
+from .ants_ai import Action, Direction, FinishedReason, Game
 
 type ActType = np.ndarray
 type InfoType = dict[str, Any]
 type ObsType = dict[str, Any]
+
+RL_AGENT_PLAYER_INDEX = 0
 
 
 class AntsEnv(gym.Env):
@@ -164,7 +166,7 @@ class AntsEnv(gym.Env):
         self._game_state = game_state
         self._update_index_mapping()
 
-        return self._get_obs(player=0), self._get_info()
+        return self._get_obs(player=RL_AGENT_PLAYER_INDEX), self._get_info()
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, InfoType]:
         """Takes a step in the environment.
@@ -177,8 +179,7 @@ class AntsEnv(gym.Env):
         # Map the RL agent's action to the game actions
         game_actions: List[Action] = []
         for player in range(self.game.players()):
-            # Player 0 is the main RL agent
-            if player == 0:
+            if player == RL_AGENT_PLAYER_INDEX:
                 raw_action = action
             else:
                 # Get the action from the other agents
@@ -199,10 +200,12 @@ class AntsEnv(gym.Env):
 
         game_state = self.game.update(game_actions)
 
+        self._game_state = game_state
+        self._update_index_mapping()
+
         return (
-            self._get_obs(player=0),
-            # TODO: Define a proper reward function. The scores are the rewards for now.
-            game_state.scores,
+            self._get_obs(player=RL_AGENT_PLAYER_INDEX),
+            self._get_reward(),
             game_state.finished,
             # Truncated is always False, since the game is not truncated
             False,
@@ -272,6 +275,42 @@ class AntsEnv(gym.Env):
             "scores": self._game_state.scores,
             "done_reason": self._game_state.finished_reason,
         }
+
+    def _get_reward(self) -> float:
+        reward = self._get_total_score(player=RL_AGENT_PLAYER_INDEX)
+
+        # Add bonus/penalty at the end of the game
+        if self._game_state.finished:
+            if (
+                self._game_state.finished_reason
+                in (FinishedReason.LoneSurvivor, FinishedReason.RankStabilized)
+                and self._game_state.winner == RL_AGENT_PLAYER_INDEX
+            ):
+                reward += 100.0
+            else:
+                reward -= 100.0
+
+            return reward
+
+        # If the game hasn't finished, and this is a zero-sum game,
+        # we subtract the scores of all other players from the score of the main RL agent player
+        for player in range(self.game.players()):
+            if player == RL_AGENT_PLAYER_INDEX:
+                continue
+            reward -= self._get_total_score(player)
+
+        return float(reward)
+
+    def _get_total_score(self, player: int) -> int:
+        # The total score is the sum of the following:
+        # - The player score
+        # - The number of ants alive
+        # - The ants in the hive (a proxy for food harvested successfully)
+        scores = self._game_state.scores[player]
+        ants = len(self._game_state.ants[player])
+        hive = len(self._game_state.hive[player])
+
+        return scores + ants + hive
 
     def _update_index_mapping(self) -> None:
         for player, ants in enumerate(self._game_state.ants) in range(

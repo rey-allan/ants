@@ -185,6 +185,7 @@ class GameState:
         turn (int): The current turn number.
         scores (List[int]): The scores for each player.
         ants (List[List[Ant]]): The list of ants for each player.
+        hive (List[int]): The list of the number of ants in each player's hive.
         finished (bool): Whether the game has finished.
         finished_reason (Optional[FinishedReason]): The reason the game finished. Only present if the game has finished.
         winner (Optional[int]): The player that won the game. Only present if the game has finished and there is a winner.
@@ -196,6 +197,8 @@ class GameState:
     """The scores for each player."""
     ants: List[List[Ant]]
     """The list of ants for each player."""
+    hive: List[int]
+    """The list of the number of ants in each player's hive."""
     finished: bool
     """Whether the game has finished."""
     finished_reason: Optional[FinishedReason]
