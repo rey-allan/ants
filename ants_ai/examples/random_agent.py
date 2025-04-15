@@ -9,7 +9,7 @@ from ants_ai import AntsEnv, RandomAgent, Visualizer
 def main() -> None:
     map_file = Path(__file__).parent / "maps" / "tutorial.map"
 
-    env = AntsEnv(map_file, replay_filename="/tmp/tutorial_replay.json")
+    env = AntsEnv(map_file, replay_filename="/tmp/random_agent_replay.json")
     p1 = RandomAgent("RL Agent", env.action_space, env.num_actions, seed=42)
 
     start = time.time()
@@ -27,7 +27,7 @@ def main() -> None:
     print(f"Winner: {info['winner']}")
     print(f"Game took {time.time() - start} seconds")
 
-    Visualizer("/tmp/tutorial_replay.json", scale=20, show_grid=True).run()
+    Visualizer("/tmp/random_agent_replay.json", scale=20, show_grid=True).run()
 
 
 if __name__ == "__main__":

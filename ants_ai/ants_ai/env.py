@@ -283,7 +283,7 @@ class AntsEnv(gym.Env):
         return {
             "turn": self._game_state.turn,
             "scores": self._game_state.scores,
-            "done_reason": self._game_state.finished_reason,
+            "done_reason": str(self._game_state.finished_reason),
             "winner": self._game_state.winner,
         }
 
