@@ -660,6 +660,8 @@ impl Game {
             .into_iter()
             .filter(|(entity, _, _)| {
                 entity.name() == "Ant"
+                    && entity.alive().is_some()
+                    && entity.alive().unwrap()
                     && entity.player().is_some()
                     && entity.player().unwrap() != player
             })
@@ -1251,6 +1253,36 @@ mod tests {
         assert!(!game.map.get(2, 3).unwrap().alive().unwrap());
         assert!(game.map.get(2, 4).unwrap().alive().unwrap());
         assert!(!game.map.get(2, 5).unwrap().alive().unwrap());
+    }
+
+    #[test]
+    fn when_attacking_after_a_move_that_kills_ants_the_dead_ants_should_be_ignored() {
+        let map = "\
+            rows 3
+            cols 5
+            players 2
+            m .b...
+            m .ab.
+            m ..b..";
+        let mut game = Game::new(map, 4, 5, 1, 5, 1500, 500, 0, None);
+
+        assert!(game.map.get(0, 1).unwrap().alive().unwrap());
+        assert!(game.map.get(1, 1).unwrap().alive().unwrap());
+        assert!(game.map.get(1, 2).unwrap().alive().unwrap());
+        assert!(game.map.get(2, 2).unwrap().alive().unwrap());
+
+        // Move an ant towards its ally causing it collision and both ants to die
+        game.map.move_entity((2, 2), (1, 2));
+
+        // Make sure they are dead
+        assert!(!game.map.get(1, 2).unwrap().alive().unwrap());
+        assert!(!game.map.get(2, 2).unwrap().alive().unwrap());
+
+        game.attack();
+
+        // The remaining ants from player 0 and player 1 should both attack each other and die
+        assert!(!game.map.get(0, 1).unwrap().alive().unwrap());
+        assert!(!game.map.get(1, 1).unwrap().alive().unwrap());
     }
 
     #[test]
