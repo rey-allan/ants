@@ -8,6 +8,7 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 use rand::SeedableRng;
 use std::collections::{HashMap, HashSet};
+use std::vec;
 
 /// The Ants game.
 /// Main entry point for running the game.
@@ -21,6 +22,7 @@ pub struct Game {
     turn: usize,
     scores: Vec<usize>,
     hive: Vec<usize>,
+    turn_stats: Vec<TurnStats>,
     food_per_turn: usize,
     started: bool,
     finished: bool,
@@ -47,6 +49,8 @@ pub struct GameState {
     pub ants: Vec<Vec<PlayerAnt>>,
     /// The number of ants in the hive for each player where the index is the player number.
     pub hive: Vec<usize>,
+    /// The turn stats for each player where the index is the player number.
+    pub turn_stats: Vec<TurnStats>,
     /// Whether the game has finished.
     pub finished: bool,
     /// The reason the game finished. `None` if the game has not finished.
@@ -155,6 +159,92 @@ pub struct PlayerAnt {
     pub field_of_vision: Vec<StateEntity>,
 }
 
+/// Represents the statistics for a turn for a player.
+#[derive(Clone)]
+#[pyclass(name = "TurnStats", module = "ants_engine", get_all)]
+pub struct TurnStats {
+    /// The turn number.
+    pub turn: usize,
+    /// The number of food harvested.
+    pub food_harvested: usize,
+    /// The number of ants spawned.
+    pub ants_spawned: usize,
+    /// The number of ants killed.
+    pub ants_killed: usize,
+    /// The number of hills razed.
+    pub hills_razed: usize,
+    /// The number of ants lost.
+    pub ants_lost: usize,
+    /// The number of hills lost.
+    pub hills_lost: usize,
+}
+
+impl TurnStats {
+    /// Creates a new turn stats object.
+    ///
+    /// # Arguments
+    /// * `turn` - The turn number.
+    pub fn new(turn: usize) -> TurnStats {
+        TurnStats {
+            turn,
+            food_harvested: 0,
+            ants_spawned: 0,
+            ants_killed: 0,
+            hills_razed: 0,
+            ants_lost: 0,
+            hills_lost: 0,
+        }
+    }
+
+    /// Adds food harvested.
+    ///
+    /// # Arguments
+    /// * `food` - The amount of food harvested.
+    pub fn add_food_harvested(&mut self, food: usize) {
+        self.food_harvested += food;
+    }
+
+    /// Adds ants spawned.
+    ///
+    /// # Arguments
+    /// * `ants` - The amount of ants spawned.
+    pub fn add_ants_spawned(&mut self, ants: usize) {
+        self.ants_spawned += ants;
+    }
+
+    /// Adds ants killed.
+    ///
+    /// # Arguments
+    /// * `ants` - The amount of ants killed.
+    pub fn add_ants_killed(&mut self, ants: usize) {
+        self.ants_killed += ants;
+    }
+
+    /// Adds hills razed.
+    ///
+    /// # Arguments
+    /// * `hills` - The amount of hills razed.
+    pub fn add_hills_razed(&mut self, hills: usize) {
+        self.hills_razed += hills;
+    }
+
+    /// Adds ants lost.
+    ///
+    /// # Arguments
+    /// * `ants` - The amount of ants lost.
+    pub fn add_ants_lost(&mut self, ants: usize) {
+        self.ants_lost += ants;
+    }
+
+    /// Adds hills lost.
+    ///
+    /// # Arguments
+    /// * `hills` - The amount of hills lost.
+    pub fn add_hills_lost(&mut self, hills: usize) {
+        self.hills_lost += hills;
+    }
+}
+
 #[pymethods]
 impl Game {
     /// Creates a new game.
@@ -196,6 +286,7 @@ impl Game {
             turn: 0,
             scores: vec![0; players],
             hive: vec![0; players],
+            turn_stats: vec![TurnStats::new(0); players],
             food_per_turn: food_rate * players,
             started: false,
             finished: false,
@@ -276,6 +367,7 @@ impl Game {
         }
 
         self.turn += 1;
+        self.turn_stats = vec![TurnStats::new(self.turn); self.map.players()];
 
         self.move_ants(actions);
         self.attack();
@@ -399,6 +491,8 @@ impl Game {
 
             // Update the hive with the remaining food
             self.hive[player] -= ant_hills.len();
+            // And update the turn stats
+            self.turn_stats[player].add_ants_spawned(ant_hills.len());
 
             // Spawn ants on the chosen hills
             self.spawn_ants(ant_hills.cloned().collect());
@@ -504,23 +598,29 @@ impl Game {
 
             // Ant dies if its focused on more or equal enemies than its enemy with the most attention power
             if focus >= min_enemy_focus {
-                to_kill.push((row, col));
+                to_kill.push((ant.player().unwrap(), row, col));
 
                 // Collect attack log from each enemy to the ant
-                for (_, enemy_row, enemy_col) in ant_enemies {
-                    attack_logs.push(((*enemy_row, *enemy_col), (row, col)));
+                for (ant_enemy, enemy_row, enemy_col) in ant_enemies {
+                    attack_logs.push((
+                        ant_enemy.player().unwrap(),
+                        (*enemy_row, *enemy_col),
+                        (row, col),
+                    ));
                 }
             }
         }
 
         // After all battles are resolved, kill the ants
-        for (row, col) in to_kill {
+        for (player, row, col) in to_kill {
             self.map.get_mut(row, col).unwrap().set_alive(false);
+            self.turn_stats[player].add_ants_lost(1);
         }
 
         // Log all attack events
-        for (enemy_pos, ant_pos) in attack_logs {
+        for (enemy_player, enemy_pos, ant_pos) in attack_logs {
             self.replay_logger.log_attack(self.turn, enemy_pos, ant_pos);
+            self.turn_stats[enemy_player].add_ants_killed(1);
         }
     }
 
@@ -544,10 +644,13 @@ impl Game {
             .collect();
 
         for (hill_owner, player, row, col) in hills_to_raze {
-            // Add the points for razin the hill to the player's score
+            // Add the points for razing the hill to the player's score
             self.scores[player] += self.points_for_razing_hill;
             // Subtract the points for losing the hill from the hill owner's score
             self.scores[hill_owner] -= self.points_for_losing_hill;
+            // Update the turn stats for both players
+            self.turn_stats[player].add_hills_razed(1);
+            self.turn_stats[hill_owner].add_hills_lost(1);
             // Update the hill to be razed
             self.map
                 .get_mut(row, col)
@@ -593,6 +696,7 @@ impl Game {
 
                     // This ant can harvest the food
                     self.hive[*player] += 1;
+                    self.turn_stats[*player].add_food_harvested(1);
                     ants_that_harvested_food.insert((*row, *col));
                     can_harvest = true;
                     break;
@@ -697,6 +801,7 @@ impl Game {
             scores: self.scores.clone(),
             ants,
             hive: self.hive.clone(),
+            turn_stats: self.turn_stats.clone(),
             finished: self.finished,
             finished_reason: self.finished_reason.clone(),
             winner: self.winner,
@@ -1117,6 +1222,12 @@ mod tests {
 
         assert!(!game.map.get(1, 1).unwrap().alive().unwrap());
         assert!(!game.map.get(1, 3).unwrap().alive().unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_killed, 1);
+        assert_eq!(turn_stats[0].ants_lost, 1);
+        assert_eq!(turn_stats[1].ants_killed, 1);
+        assert_eq!(turn_stats[1].ants_lost, 1);
     }
 
     #[test]
@@ -1139,6 +1250,12 @@ mod tests {
         assert!(game.map.get(0, 3).unwrap().alive().unwrap());
         assert!(!game.map.get(1, 1).unwrap().alive().unwrap());
         assert!(game.map.get(2, 3).unwrap().alive().unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_killed, 0);
+        assert_eq!(turn_stats[0].ants_lost, 1);
+        assert_eq!(turn_stats[1].ants_killed, 2);
+        assert_eq!(turn_stats[1].ants_lost, 0);
     }
 
     #[test]
@@ -1161,6 +1278,14 @@ mod tests {
         assert!(!game.map.get(0, 3).unwrap().alive().unwrap());
         assert!(!game.map.get(1, 1).unwrap().alive().unwrap());
         assert!(!game.map.get(2, 3).unwrap().alive().unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_killed, 2);
+        assert_eq!(turn_stats[0].ants_lost, 1);
+        assert_eq!(turn_stats[1].ants_killed, 2);
+        assert_eq!(turn_stats[1].ants_lost, 1);
+        assert_eq!(turn_stats[2].ants_killed, 2);
+        assert_eq!(turn_stats[2].ants_lost, 1);
     }
 
     #[test]
@@ -1168,7 +1293,7 @@ mod tests {
         let map = "\
             rows 3
             cols 5
-            players 2
+            players 3
             m .....
             m a.b.c
             m .....";
@@ -1183,6 +1308,14 @@ mod tests {
         assert!(game.map.get(1, 0).unwrap().alive().unwrap());
         assert!(!game.map.get(1, 2).unwrap().alive().unwrap());
         assert!(game.map.get(1, 4).unwrap().alive().unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_killed, 1);
+        assert_eq!(turn_stats[0].ants_lost, 0);
+        assert_eq!(turn_stats[1].ants_killed, 0);
+        assert_eq!(turn_stats[1].ants_lost, 1);
+        assert_eq!(turn_stats[2].ants_killed, 1);
+        assert_eq!(turn_stats[2].ants_lost, 0);
     }
 
     #[test]
@@ -1207,6 +1340,14 @@ mod tests {
         assert!(game.map.get(1, 1).unwrap().alive().unwrap());
         assert!(game.map.get(1, 3).unwrap().alive().unwrap());
         assert!(!game.map.get(2, 3).unwrap().alive().unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_killed, 4);
+        assert_eq!(turn_stats[0].ants_lost, 0);
+        assert_eq!(turn_stats[1].ants_killed, 1);
+        assert_eq!(turn_stats[1].ants_lost, 1);
+        assert_eq!(turn_stats[2].ants_killed, 1);
+        assert_eq!(turn_stats[2].ants_lost, 1);
     }
 
     #[test]
@@ -1253,6 +1394,12 @@ mod tests {
         assert!(!game.map.get(2, 3).unwrap().alive().unwrap());
         assert!(game.map.get(2, 4).unwrap().alive().unwrap());
         assert!(!game.map.get(2, 5).unwrap().alive().unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_killed, 21);
+        assert_eq!(turn_stats[0].ants_lost, 5);
+        assert_eq!(turn_stats[1].ants_killed, 22);
+        assert_eq!(turn_stats[1].ants_lost, 5);
     }
 
     #[test]
@@ -1283,6 +1430,12 @@ mod tests {
         // The remaining ants from player 0 and player 1 should both attack each other and die
         assert!(!game.map.get(0, 1).unwrap().alive().unwrap());
         assert!(!game.map.get(1, 1).unwrap().alive().unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_killed, 1);
+        assert_eq!(turn_stats[0].ants_lost, 1);
+        assert_eq!(turn_stats[1].ants_killed, 1);
+        assert_eq!(turn_stats[1].ants_lost, 1);
     }
 
     #[test]
@@ -1304,6 +1457,9 @@ mod tests {
 
         assert_eq!(game.scores, vec![1]);
         assert!(game.map.get(0, 0).unwrap().alive().unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].hills_razed, 0);
     }
 
     #[test]
@@ -1330,6 +1486,9 @@ mod tests {
 
         assert_eq!(game.scores, vec![1]);
         assert!(game.map.get(0, 0).unwrap().alive().unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].hills_razed, 0);
     }
 
     #[test]
@@ -1367,6 +1526,12 @@ mod tests {
             .unwrap()
             .alive()
             .unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].hills_razed, 0);
+        assert_eq!(turn_stats[0].hills_lost, 0);
+        assert_eq!(turn_stats[1].hills_razed, 0);
+        assert_eq!(turn_stats[1].hills_lost, 0);
     }
 
     #[test]
@@ -1403,6 +1568,12 @@ mod tests {
             .unwrap()
             .alive()
             .unwrap());
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].hills_razed, 0);
+        assert_eq!(turn_stats[0].hills_lost, 1);
+        assert_eq!(turn_stats[1].hills_razed, 1);
+        assert_eq!(turn_stats[1].hills_lost, 0);
     }
 
     #[test]
@@ -1420,6 +1591,10 @@ mod tests {
         assert_eq!(game.map.get(0, 0).unwrap().name(), "Hill");
         assert_eq!(game.map.get(0, 1).unwrap().name(), "Hill");
         assert_eq!(game.hive, vec![0, 0]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_spawned, 0);
+        assert_eq!(turn_stats[1].ants_spawned, 0);
     }
 
     #[test]
@@ -1440,6 +1615,9 @@ mod tests {
 
         assert_eq!(game.map.get(0, 0).unwrap().name(), "Hill");
         assert_eq!(game.hive, vec![1]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_spawned, 0);
     }
 
     #[test]
@@ -1460,6 +1638,10 @@ mod tests {
         assert_eq!(game.map.get(0, 1).unwrap().name(), "Ant");
         assert_eq!(game.map.get(0, 1).unwrap().player().unwrap(), 1);
         assert_eq!(game.hive, vec![0, 0]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_spawned, 1);
+        assert_eq!(turn_stats[1].ants_spawned, 1);
     }
 
     #[test]
@@ -1477,6 +1659,9 @@ mod tests {
 
         assert_eq!(game.map.get(0, 0).unwrap().name(), "Ant");
         assert_eq!(game.hive, vec![4]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_spawned, 1);
     }
 
     #[test]
@@ -1497,6 +1682,9 @@ mod tests {
         assert_eq!(game.map.get(0, 0).unwrap().name(), "Hill");
         assert_eq!(game.map.get(1, 1).unwrap().name(), "Ant");
         assert_eq!(game.hive, vec![0]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_spawned, 1);
     }
 
     #[test]
@@ -1524,6 +1712,10 @@ mod tests {
         assert_eq!(game.map.get(1, 0).unwrap().player().unwrap(), 1);
 
         assert_eq!(game.hive, vec![3, 0]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_spawned, 2);
+        assert_eq!(turn_stats[1].ants_spawned, 2);
     }
 
     #[test]
@@ -1544,6 +1736,9 @@ mod tests {
         assert_eq!(game.map.get(0, 0).unwrap().name(), "Hill");
         assert_eq!(game.hive, vec![5]);
 
+        let turn_stats = game.turn_stats.clone();
+        assert_eq!(turn_stats[0].ants_spawned, 0);
+
         // Kill one of the ants
         game.map.get_mut(0, 1).unwrap().set_alive(false);
         // And spawn again
@@ -1552,6 +1747,9 @@ mod tests {
         // Now the ant is spawned because there is enough food in the hive and the max colony size is not reached
         assert_eq!(game.map.get(0, 0).unwrap().name(), "Ant");
         assert_eq!(game.hive, vec![4]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].ants_spawned, 1);
     }
 
     #[test]
@@ -1571,6 +1769,9 @@ mod tests {
         assert_eq!(game.map.get(1, 1).unwrap().name(), "Food");
         assert_eq!(game.map.get(2, 2).unwrap().name(), "Food");
         assert_eq!(game.hive, vec![0]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].food_harvested, 0);
     }
 
     #[test]
@@ -1590,6 +1791,9 @@ mod tests {
         assert!(game.map.get(0, 0).is_none());
         assert!(game.map.get(2, 2).is_none());
         assert_eq!(game.hive, vec![2, 0]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].food_harvested, 2);
     }
 
     #[test]
@@ -1609,6 +1813,10 @@ mod tests {
         assert!(game.map.get(0, 0).is_none());
         assert!(game.map.get(2, 2).is_none());
         assert_eq!(game.hive, vec![0, 0]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].food_harvested, 0);
+        assert_eq!(turn_stats[1].food_harvested, 0);
     }
 
     #[test]
@@ -1629,6 +1837,9 @@ mod tests {
         assert!(game.map.get(1, 2).is_some());
         assert!(game.map.get(2, 1).is_some());
         assert_eq!(game.hive, vec![1]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].food_harvested, 1);
     }
 
     #[test]
@@ -1650,6 +1861,9 @@ mod tests {
         assert!(game.map.get(1, 2).is_some());
         assert!(game.map.get(2, 1).is_some());
         assert_eq!(game.hive, vec![2]);
+
+        let turn_stats = game.turn_stats;
+        assert_eq!(turn_stats[0].food_harvested, 2);
     }
 
     #[test]

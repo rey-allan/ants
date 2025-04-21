@@ -9,6 +9,7 @@ pub use game::Direction;
 pub use game::FinishedReason;
 pub use game::Game;
 pub use game::GameState;
+pub use game::TurnStats;
 
 mod entities;
 mod map;
@@ -26,6 +27,7 @@ fn ants_ai(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Game>()?;
     m.add_class::<GameState>()?;
     m.add_class::<PlayerAnt>()?;
+    m.add_class::<TurnStats>()?;
     m.add_class::<StateEntity>()?;
     Ok(())
 }
