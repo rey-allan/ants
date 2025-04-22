@@ -186,6 +186,7 @@ class GameState:
         scores (List[int]): The scores for each player.
         ants (List[List[Ant]]): The list of ants for each player.
         hive (List[int]): The list of the number of ants in each player's hive.
+        turn_stats (List[TurnStats]): The list of turn stats for each player.
         finished (bool): Whether the game has finished.
         finished_reason (Optional[FinishedReason]): The reason the game finished. Only present if the game has finished.
         winner (Optional[int]): The player that won the game. Only present if the game has finished and there is a winner.
@@ -199,9 +200,39 @@ class GameState:
     """The list of ants for each player."""
     hive: List[int]
     """The list of the number of ants in each player's hive."""
+    turn_stats: List[TurnStats]
+    """The list of turn stats for each player."""
     finished: bool
     """Whether the game has finished."""
     finished_reason: Optional[FinishedReason]
     """The reason the game finished. Only present if the game has finished."""
     winner: Optional[int]
     """The player that won the game. Only present if the game has finished and there is a winner."""
+
+class TurnStats:
+    """A class representing the stats for a turn.
+
+    Attributes:
+        turn (int): The turn number.
+        food_harvested (int): The amount of food harvested by the player.
+        ants_spawned (int): The number of ants spawned by the player.
+        ants_killed (int): The number of ants killed by the player.
+        hills_razed (int): The number of hills razed by the player.
+        ants_lost (int): The number of ants lost by the player.
+        hills_lost (int): The number of hills lost by the player.
+    """
+
+    turn: int
+    """The turn number."""
+    food_harvested: int
+    """The amount of food harvested by the player."""
+    ants_spawned: int
+    """The number of ants spawned by the player."""
+    ants_killed: int
+    """The number of ants killed by the player."""
+    hills_razed: int
+    """The number of hills razed by the player."""
+    ants_lost: int
+    """The number of ants lost by the player."""
+    hills_lost: int
+    """The number of hills lost by the player."""

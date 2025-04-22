@@ -11,6 +11,14 @@ type InfoType = dict[str, Any]
 type ObsType = dict[str, Any]
 
 RL_AGENT_PLAYER_INDEX = 0
+FOOD_HARVESTED_MULTIPLIER = 1.0
+ANTS_SPAWNED_MULTIPLIER = 1.0
+ANTS_KILLED_MULTIPLIER = 2.0
+ANTS_LOST_MULTIPLIER = 2.0
+HILLS_RAZED_MULTIPLIER = 10.0
+HILL_LOST_MULTIPLIER = 10.0
+END_GAME_BONUS = 100.0
+LIVING_PENALTY = 0.1
 
 
 class AntsEnv(gym.Env):
@@ -288,7 +296,17 @@ class AntsEnv(gym.Env):
         }
 
     def _get_reward(self) -> float:
-        reward = self._get_total_score(player=RL_AGENT_PLAYER_INDEX)
+        reward = 0.0
+        stats = self._game_state.turn_stats[RL_AGENT_PLAYER_INDEX]
+
+        reward += stats.food_harvested * FOOD_HARVESTED_MULTIPLIER
+        reward += stats.ants_spawned * ANTS_SPAWNED_MULTIPLIER
+        reward += stats.ants_killed * ANTS_KILLED_MULTIPLIER
+        reward += stats.hills_razed * HILLS_RAZED_MULTIPLIER
+        reward -= stats.ants_lost * ANTS_LOST_MULTIPLIER
+        reward -= stats.hills_lost * HILL_LOST_MULTIPLIER
+
+        reward -= LIVING_PENALTY
 
         # Add bonus/penalty at the end of the game
         if self._game_state.finished:
@@ -297,31 +315,11 @@ class AntsEnv(gym.Env):
                 in (FinishedReason.LoneSurvivor, FinishedReason.RankStabilized)
                 and self._game_state.winner == RL_AGENT_PLAYER_INDEX
             ):
-                reward += 100.0
+                reward += END_GAME_BONUS
             else:
-                reward -= 100.0
-
-            return reward
-
-        # If the game hasn't finished, and this is a zero-sum game,
-        # we subtract the scores of all other players from the score of the main RL agent player
-        for player in range(self.game.players()):
-            if player == RL_AGENT_PLAYER_INDEX:
-                continue
-            reward -= self._get_total_score(player)
+                reward -= END_GAME_BONUS
 
         return float(reward)
-
-    def _get_total_score(self, player: int) -> int:
-        # The total score is the sum of the following:
-        # - The player score
-        # - The number of ants alive
-        # - The ants in the hive (a proxy for food harvested successfully)
-        scores = self._game_state.scores[player]
-        ants = len(self._game_state.ants[player])
-        hive = self._game_state.hive[player]
-
-        return scores + ants + hive
 
     def _update_index_mapping(self) -> None:
         for player, ants in enumerate(self._game_state.ants):
