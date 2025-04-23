@@ -395,8 +395,10 @@ impl Game {
 
         // If the game finished, log the end game and save the replay
         if self.finished {
-            self.replay_logger
-                .log_end_game(format!("{:?}", self.finished_reason.as_ref().unwrap()));
+            self.replay_logger.log_end_game(
+                format!("{:?}", self.finished_reason.as_ref().unwrap()),
+                self.winner,
+            );
             self.replay_logger.save();
         }
 
