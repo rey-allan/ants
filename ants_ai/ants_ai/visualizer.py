@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Self
+from typing import Any, Optional, Self
 
 # Hide the annoying pygame support prompt
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
@@ -25,6 +25,13 @@ PLAYER_COLORS = {
     9: (207, 175, 183),
 }
 UPDATE_EPSILON = 0.001
+REFERENCE_WINDOW_SIZE = 800
+REFERENCE_FONT_SIZE = 20
+PLAYERS_LABEL = "Players: "
+LIVE_ANTS_LABEL = "Live ants: "
+SCORES_LABEL = "Scores: "
+HIVE_LABEL = "Hive: "
+INFO_LABEL_OFFSET = 10
 
 
 class TurnPhase(Enum):
@@ -141,6 +148,7 @@ class Replay:
         map (Map): The map of the game.
         turns (list[Turn]): The list of turns in the game.
         finished_reason (str): The reason the game finished.
+        winner (Optional[int]): The player that won the game, if any.
     """
 
     players: int
@@ -152,6 +160,8 @@ class Replay:
     """The list of turns in the game."""
     finished_reason: str
     """The reason the game finished."""
+    winner: Optional[int]
+    """The player that won the game, if any."""
 
     @classmethod
     def from_json(cls, dict: dict[str, Any]) -> Self:
@@ -170,14 +180,15 @@ class Replay:
             _map,
             turns,
             cls._parse_finished_reason(dict["finished_reason"]),
+            dict["winner"],
         )
 
     @classmethod
     def _parse_finished_reason(cls, finished_reason: str) -> str:
         if finished_reason == "LoneSurvivor":
-            return "Lone Survivor (1 player left)"
+            return "Lone Survivor"
         elif finished_reason == "RankStabilized":
-            return "Rank Stabilized (Winner determined)"
+            return "Rank Stabilized"
         elif finished_reason == "TooMuchFood":
             return "Too Much Food"
         elif finished_reason == "TurnLimitReached":
@@ -458,9 +469,29 @@ class Visualizer:
         self._parse_map()
 
         self._land_color = (120, 89, 58)
-
         self._game_size = (self._width * self._scale, self._height * self._scale)
-        self._info_size = (self._game_size[0], int(self._game_size[1] * 0.12))
+
+        with importlib.resources.path(
+            "ants_ai.assets", "RobotoMono-Regular.ttf"
+        ) as font_path:
+            scale_factor = min(
+                self._game_size[0] / REFERENCE_WINDOW_SIZE,
+                self._game_size[1] / REFERENCE_WINDOW_SIZE,
+            )
+            font_size = int(REFERENCE_FONT_SIZE * scale_factor)
+            self._font = pygame.font.Font(str(font_path), font_size)
+
+        self._info_size = (
+            self._game_size[0],
+            # Make sure that the info panel is big enough to fit all the labels
+            int(
+                self._font.size(PLAYERS_LABEL)[1]
+                + self._font.size(LIVE_ANTS_LABEL)[1]
+                + self._font.size(SCORES_LABEL)[1]
+                + self._font.size(HIVE_LABEL)[1]
+                + INFO_LABEL_OFFSET
+            ),
+        )
         self._window_size = (
             self._game_size[0],
             self._game_size[1] + self._info_size[1],
@@ -469,11 +500,6 @@ class Visualizer:
         self._screen = pygame.display.set_mode(self._window_size)
         self._game_screen = pygame.Surface(self._game_size)
         self._info_screen = pygame.Surface(self._info_size)
-
-        with importlib.resources.path(
-            "ants_ai.assets", "RobotoMono-Regular.ttf"
-        ) as font_path:
-            self._font = pygame.font.Font(str(font_path), int(0.8 * self._scale))
 
         self._clock = pygame.time.Clock()
         # Simulation time
@@ -519,7 +545,9 @@ class Visualizer:
                 # Check if the simulation has finished
                 finished = turn >= len(self._replay.turns)
                 if finished:
-                    self._draw_endgame(self._replay.finished_reason)
+                    self._draw_endgame(
+                        self._replay.finished_reason, self._replay.winner
+                    )
                     # Re-draw the game surface to show the endgame message
                     self._screen.blit(self._game_screen, (0, self._info_size[1]))
                     pygame.display.flip()
@@ -558,17 +586,25 @@ class Visualizer:
         width, _ = self._info_size
 
         # Draw number of players
-        _, players_text_height = self._draw_text(
-            f"Players: {self._replay.players}",
+        players_text_width, players_text_height = self._draw_text(
+            f"{PLAYERS_LABEL}{self._replay.players}",
             color=(255, 255, 255),
-            location=(10, 10),
+            location=(INFO_LABEL_OFFSET, INFO_LABEL_OFFSET),
             surface=self._info_screen,
         )
 
         # Draw the turn number
         turn_text = f"Turn: {turn} / {last_turn}"
-        # Center the turn number in the middle of the info surface
-        turn_text_location = (width // 2 - self._font.size(turn_text)[0] // 2, 10)
+        turn_text_width, _ = self._font.size(turn_text)
+        # Center the turn number in the middle of the info surface after the players text
+        area_width = width - players_text_width - INFO_LABEL_OFFSET
+        turn_text_location = (
+            players_text_width
+            + INFO_LABEL_OFFSET
+            + area_width // 2
+            - turn_text_width // 2,
+            INFO_LABEL_OFFSET,
+        )
         self._draw_text(
             turn_text,
             color=(255, 255, 255),
@@ -576,34 +612,40 @@ class Visualizer:
             surface=self._info_screen,
         )
 
-        live_ants_text_width = self._font.size("Live ants: ")[0]
-        scores_text_width = self._font.size("Scores: ")[0]
-        hive_text_width = self._font.size("Hive: ")[0]
+        live_ants_text_width = self._font.size(LIVE_ANTS_LABEL)[0]
+        scores_text_width = self._font.size(SCORES_LABEL)[0]
+        hive_text_width = self._font.size(HIVE_LABEL)[0]
 
         # Draw the player scores as a colored bar proportional to the score
         self._draw_players_bar(
-            label="Scores: ",
-            label_location=(10, 10 + players_text_height),
+            label=SCORES_LABEL,
+            label_location=(INFO_LABEL_OFFSET, INFO_LABEL_OFFSET + players_text_height),
             data=self._replay.turns[turn].scores,
             # Align it with the "Live ants" bar
-            offset_x=10 + live_ants_text_width - scores_text_width,
+            offset_x=INFO_LABEL_OFFSET + live_ants_text_width - scores_text_width,
         )
 
         # Draw the number of live ants as a colored bar proportional to the number of ants
         self._draw_players_bar(
-            label="Live ants: ",
-            label_location=(10, 10 + players_text_height * 2),
+            label=LIVE_ANTS_LABEL,
+            label_location=(
+                INFO_LABEL_OFFSET,
+                INFO_LABEL_OFFSET + players_text_height * 2,
+            ),
             data=self._replay.turns[turn].ants,
-            offset_x=10,
+            offset_x=INFO_LABEL_OFFSET,
         )
 
         # Draw the number of ants in the hive as a colored bar proportional to the number of ants
         self._draw_players_bar(
-            label="Hive: ",
-            label_location=(10, 10 + players_text_height * 3),
+            label=HIVE_LABEL,
+            label_location=(
+                INFO_LABEL_OFFSET,
+                INFO_LABEL_OFFSET + players_text_height * 3,
+            ),
             data=self._replay.turns[turn].hive,
             # Align it with the "Live ants" bar
-            offset_x=10 + live_ants_text_width - hive_text_width,
+            offset_x=INFO_LABEL_OFFSET + live_ants_text_width - hive_text_width,
         )
 
     def _draw_players_bar(
@@ -694,16 +736,36 @@ class Visualizer:
         ]:
             entity.draw(self._game_screen)
 
-    def _draw_endgame(self, finished_reason: str) -> None:
-        # Draw the endgame in the center of the game surface
-        text = f"Game Over: {finished_reason}"
+    def _draw_endgame(self, finished_reason: str, winner: Optional[int]) -> None:
+        _, height = self._draw_finished_reason(finished_reason)
+        self._draw_winner(winner, offset_y=height)
+
+    def _draw_finished_reason(self, finished_reason: str) -> tuple[int]:
+        return self._draw_text_center(
+            f"Game Over: {finished_reason}", color=(255, 255, 255)
+        )
+
+    def _draw_winner(self, winner: Optional[int], offset_y: int) -> None:
+        if winner is None:
+            return
+
+        self._draw_text_center(
+            text=f"Player {winner} won!",
+            color=PLAYER_COLORS[winner],
+            offset=(0, offset_y),
+        )
+
+    def _draw_text_center(
+        self, text: str, color: tuple[int], offset: tuple[int] = (0, 0)
+    ) -> tuple[int]:
         text_width, text_height = self._font.size(text)
         location = (
-            self._game_size[0] // 2 - text_width // 2,
-            self._game_size[1] // 2 - text_height // 2,
+            offset[0] + self._game_size[0] // 2 - text_width // 2,
+            offset[1] + self._game_size[1] // 2 - text_height // 2,
         )
-        self._draw_text(
-            text, color=(255, 255, 255), location=location, surface=self._game_screen
+
+        return self._draw_text(
+            text, color=color, location=location, surface=self._game_screen
         )
 
     def _draw_text(

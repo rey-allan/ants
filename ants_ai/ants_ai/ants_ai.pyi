@@ -1,12 +1,12 @@
 from typing import List, Optional
 
 class Action:
-    """A class representing an action that an ant can tak.
+    """A class representing an action that an ant can take.
 
     Attributes:
         row (int): The row of the location of the ant.
         col (int): The column of the location of the ant.
-        direction (Direction): The direction of the action.
+        direction (Direction): The direction of the movement.
     """
 
     row: int
@@ -14,7 +14,7 @@ class Action:
     col: int
     """The column of the location of the ant."""
     direction: Direction
-    """The direction of the action."""
+    """The direction of the movement."""
 
 class Ant:
     """A class representing an ant.
@@ -116,6 +116,8 @@ class Game:
     :type food_rate: int
     :param max_turns: The maximum number of turns for the Ants game.
     :type max_turns: int
+    :param max_colony_size: The maximum number of live ants a player can have at any time.
+    :type max_colony_size: int
     :param seed: The seed for the random number generator.
     :type seed: int
     :param replay_filename: The filename to save the replay of the game to. If `None`, no replay will be saved.
@@ -130,9 +132,31 @@ class Game:
         food_radius2: int,
         food_rate: int,
         max_turns: int,
+        max_colony_size: int,
         seed: int,
         replay_filename: Optional[str],
     ) -> None: ...
+    def width(self) -> int:
+        """Returns the width of the map.
+
+        :return: The width of the map.
+        :rtype: int
+        """
+
+    def height(self) -> int:
+        """Returns the height of the map.
+
+        :return: The height of the map.
+        :rtype: int
+        """
+
+    def players(self) -> int:
+        """Returns the number of players in the game.
+
+        :return: The number of players in the game.
+        :rtype: int
+        """
+
     def start(self) -> GameState:
         """Starts the game.
 
@@ -161,8 +185,11 @@ class GameState:
         turn (int): The current turn number.
         scores (List[int]): The scores for each player.
         ants (List[List[Ant]]): The list of ants for each player.
+        hive (List[int]): The list of the number of ants in each player's hive.
+        turn_stats (List[TurnStats]): The list of turn stats for each player.
         finished (bool): Whether the game has finished.
         finished_reason (Optional[FinishedReason]): The reason the game finished. Only present if the game has finished.
+        winner (Optional[int]): The player that won the game. Only present if the game has finished and there is a winner.
     """
 
     turn: int
@@ -171,7 +198,41 @@ class GameState:
     """The scores for each player."""
     ants: List[List[Ant]]
     """The list of ants for each player."""
+    hive: List[int]
+    """The list of the number of ants in each player's hive."""
+    turn_stats: List[TurnStats]
+    """The list of turn stats for each player."""
     finished: bool
     """Whether the game has finished."""
     finished_reason: Optional[FinishedReason]
     """The reason the game finished. Only present if the game has finished."""
+    winner: Optional[int]
+    """The player that won the game. Only present if the game has finished and there is a winner."""
+
+class TurnStats:
+    """A class representing the stats for a turn.
+
+    Attributes:
+        turn (int): The turn number.
+        food_harvested (int): The amount of food harvested by the player.
+        ants_spawned (int): The number of ants spawned by the player.
+        ants_killed (int): The number of ants killed by the player.
+        hills_razed (int): The number of hills razed by the player.
+        ants_lost (int): The number of ants lost by the player.
+        hills_lost (int): The number of hills lost by the player.
+    """
+
+    turn: int
+    """The turn number."""
+    food_harvested: int
+    """The amount of food harvested by the player."""
+    ants_spawned: int
+    """The number of ants spawned by the player."""
+    ants_killed: int
+    """The number of ants killed by the player."""
+    hills_razed: int
+    """The number of hills razed by the player."""
+    ants_lost: int
+    """The number of ants lost by the player."""
+    hills_lost: int
+    """The number of hills lost by the player."""

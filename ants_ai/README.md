@@ -10,12 +10,12 @@ pip install ants-ai
 
 ## Environment
 
-The environment is based on the original [Ants AI Challenge](http://ants.aichallenge.org/) with a few modifications of the rules.
+The environment is based on the original [Ants AI Challenge](http://ants.aichallenge.org/).
 The game is played on a grid where each cell can contain food, water, ants, hills, or be empty (land).
 
 The goal of the game is to destroy all enemies' hills while protecting your own. The game is played in turns.
 
-To learn more about the different rules of the game, refer to the original documentation [here](http://ants.aichallenge.org/specification.php).
+To learn more about the different rules of the game, refer to the original documentation [here](http://ants.aichallenge.org/specification.php). Note, however, that this environment is not a 100% faithful recreation of the original game. Some rules have been changed. Refer to the source code for more details.
 
 ### Maps
 
@@ -23,41 +23,62 @@ The environment uses a map file to define the game following the original format
 You can find a variety of maps in the original repository [here](https://github.com/aichallenge/aichallenge/tree/epsilon/ants/maps).
 Or follow the [instructions](http://ants.aichallenge.org/specification.php#Map-Format) to generate your own maps.
 
-### Observations
+### Observation Space
 
-A list of all the alive ants in the game, per player. Each ant contains the following attributes:
+The state is a **dictionary** of `Space`s with two keys: `map` and `ants`.
 
-- `id`: The unique id of the ant.
-- `player`: The player id of the ant.
-- `row`: The row of the location of the ant.
-- `col`: The column of the location of the ant.
-- `alive`: A boolean indicating if the ant is alive or not. This is always `true` for the ants in the observation.
-- `field_of_vision`: A list of all the entities that the ant can see.
+#### `map`
 
-Each entity in the field of vision contains the following attributes:
+A partially observable **image-like** representation of the map of size `channels x rows x cols`. The channels are:
 
-- `name`: The name of the entity. One of "Ant", "Food", "Water" or "Hill".
-- `player`: The player that owns the entity. Only present if the entity is an ant or a hill.
-- `row`: The row of the location of the entity.
-- `col`: The column of the location of the entity.
-- `alive`: A boolean indicating if the entity is alive or not. Only present if the entity is an ant.
+- `0`: The visibility mask. This is a binary mask that indicates which cells are visible to the player.
+- `1`: The live colony of the player. This is a binary mask that indicates which cells contain ants of the player.
+- `2`: The dead colony of the player. This is a binary mask that indicates which cells contain dead ants of the player.
+- `3`: The enemy colonies. This is a binary mask that indicates which cells contain ants of the enemies.
+- `4`: The dead enemy colonies. This is a binary mask that indicates which cells contain dead ants of the enemies.
+- `5`: The food. This is a binary mask that indicates which cells contain food.
+- `6`: The hills of the player. This is a binary mask that indicates which cells contain the hills of the player.
+- `7`: The razed hills of the player. This is a binary mask that indicates which cells contain the razed hills of the player.
+- `8`: The enemy hills. This is a binary mask that indicates which cells contain the hills of the enemies.
+- `9`: The razed enemy hills. This is a binary mask that indicates which cells contain the razed hills of the enemies.
+- `10`: The water. This is a binary mask that indicates which cells contain water.
 
-### Actions
+#### `ants`
 
-Ants can only move, so each action is represented by a `row`, `col` and `direction`, where the `row` and `col` are the coordinates of the ant and the `direction` is one of "North", "South", "East" or "West".
-The action is only valid if the ant can move in that direction. If the action is not valid, the ant will not move.
+A binary array of size `MAX_COLONY_SIZE` that represents the ants of the player. Each element of the array is a binary value indicating whether the ant is alive or not.
 
-When stepping, a list of actions is passed to the environment for all the ants that will move. If you don't want to move an ant, don't include it in the list of actions.
+This array should be used by agents to **mask** their actions to only the ants that are alive.
+
+### Action Space
+
+The action space is a list of actions for each ant. The possible discrete actions are:
+
+- `0`: North
+- `1`: East
+- `2`: South
+- `3`: West
+- `4`: Stay
 
 ### Rewards
 
-The rewards is a list of scores for each player. The score is calculated as follows:
+The reward, at each turn, is calculated as follows:
 
-- Each player starts with 1 point per hill.
-- Razing (i.e. destroying) an enemy hill is 2 points.
-- Losing a hill is -1 points.
+```python
+total_reward = (
+    food_harvested * 1.0 +
+    ants_spawned * 1.0 +
+    ants_killed * 2.0 +
+    hills_razed * 10.0 -
+    ants_lost * 2.0 -
+    hills_lost * 10.0 -
+    0.01 # living penalty
+)
+```
 
-Note that this might not be the best rewarding scheme, and we recommend you define your own reward to improve the performance of your agent.
+At the end of the game, an added bonus/penalty as follows:
+
+- `+100` if the player wins
+- `-100` if the player loses or ends in a draw
 
 ## Visualization
 

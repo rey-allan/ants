@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ants_ai"
-version = "1.0.1"
+version = "1.0.2"
 description = "Recreating Google's Ants AI Challenge for AI research."
 authors = [
     {name = "Allan Reyes", email = "allan.rexo@gmail.com"}
@@ -14,14 +14,16 @@ maintainers = [
 ]
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
+    "gymnasium",
     "pygame",
+    "stable-baselines3[extra]",
 ]
 
 [project.urls]
