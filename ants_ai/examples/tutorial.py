@@ -182,6 +182,7 @@ def main() -> None:
         max_turns=500,
         max_colony_size=max_colony_size,
         replay_filename="/tmp/tutorial_replay.json" if args.eval else None,
+        seed=42,
     )
     agent = RLAgent("RL Agent", env, max_colony_size, env.num_actions, seed=42)
 
