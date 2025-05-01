@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ants_ai"
-version = "1.0.2"
+version = "1.0.3"
 description = "Recreating Google's Ants AI Challenge for AI research."
 authors = [
     {name = "Allan Reyes", email = "allan.rexo@gmail.com"}

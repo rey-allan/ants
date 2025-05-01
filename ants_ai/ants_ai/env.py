@@ -161,7 +161,12 @@ class AntsEnv(gym.Env):
         :return: The initial observation and info.
 
                  - The observation is a 2D grid representing a partially observable map and the vector of ants.
-                 - The info is a dictionary with the keys `turn`, `scores`, `done_reason`, `winner`.
+                 - The info is a dictionary with the keys `turn`, `scores`, `done_reason`, `winner` and `game_state`.
+                         - `turn` is the current turn of the game.
+                         - `scores` is a list of scores for each player.
+                         - `done_reason` is the reason why the game is done, if it is done.
+                         - `winner` is the index of the winner, if there is one.
+                         - `game_state` is the raw game state (see `GameState`), useful for heuristic-based agents and not suitable for RL agents.
         :rtype: Tuple[ObsType, InfoType]
         """
         super().reset(seed=seed, options=options)
@@ -186,7 +191,7 @@ class AntsEnv(gym.Env):
 
         :param action: The action to take. The action is an array of actions for each ant.
         :type actions: ActType
-        :return: The observation, reward, whether the game is done, whether the game was truncated and extra info.
+        :return: The observation, reward, whether the game is done, whether the game was truncated and extra info (see `reset()`).
         :rtype: Tuple[ObsType, float, bool, bool, InfoType]
         """
         # Map the RL agent's action to the game actions
@@ -293,6 +298,7 @@ class AntsEnv(gym.Env):
             "scores": self._game_state.scores,
             "done_reason": str(self._game_state.finished_reason),
             "winner": self._game_state.winner,
+            "game_state": self._game_state,
         }
 
     def _get_reward(self) -> float:
